@@ -27,6 +27,9 @@ class LLMSettings(_Frozen):
     api_key: SecretStr | None = None
     generator_model: str | None = None
     judge_model: str | None = None
+    # Reasoning models (the judge) can take minutes on long prompts.
+    timeout_s: float = Field(default=300.0, gt=0)
+    max_retries: int = Field(default=3, ge=0)
 
     @model_validator(mode="after")
     def _judge_is_independent(self) -> Self:
