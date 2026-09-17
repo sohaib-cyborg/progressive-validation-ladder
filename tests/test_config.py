@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from toolvalidator.config import LLMSettings, load_settings, parse_env_file
+from toolvalidator.config import LLMSettings, StaticSettings, load_settings, parse_env_file
 
 
 def test_defaults_with_empty_environment() -> None:
@@ -20,6 +20,16 @@ def test_defaults_with_empty_environment() -> None:
     assert s.sandbox.timeout_s > 0
     assert s.dataset_dir == Path("data/runbugrun_py")
     assert s.results_dir == Path("results")
+    assert s.static.bandit_reject_severity == "HIGH"
+
+
+def test_bandit_reject_severity_is_configurable() -> None:
+    assert StaticSettings(bandit_reject_severity="MEDIUM").bandit_reject_severity == "MEDIUM"
+
+
+def test_bandit_reject_severity_rejects_unknown_level() -> None:
+    with pytest.raises(ValidationError):
+        StaticSettings(bandit_reject_severity="CRITICAL")  # type: ignore[arg-type]
 
 
 def test_reads_scads_values_from_environment() -> None:

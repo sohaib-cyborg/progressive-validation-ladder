@@ -9,11 +9,13 @@ fits them from data.
 import os
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
 DEFAULT_ENV_FILE = Path(".env")
+
+type Severity = Literal["LOW", "MEDIUM", "HIGH"]
 
 
 class _Frozen(BaseModel):
@@ -41,9 +43,16 @@ class SandboxSettings(_Frozen):
     timeout_s: float = Field(default=10.0, gt=0)
 
 
+class StaticSettings(_Frozen):
+    # S2 hard-rejects at or above this bandit severity. All findings are recorded
+    # regardless, so experiments can re-threshold offline (DECISIONS.md).
+    bandit_reject_severity: Severity = "HIGH"
+
+
 class Settings(_Frozen):
     llm: LLMSettings = Field(default_factory=LLMSettings)
     sandbox: SandboxSettings = Field(default_factory=SandboxSettings)
+    static: StaticSettings = Field(default_factory=StaticSettings)
     dataset_dir: Path = Path("data/runbugrun_py")
     results_dir: Path = Path("results")
 
