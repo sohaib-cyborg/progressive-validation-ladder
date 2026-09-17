@@ -118,3 +118,34 @@ to satisfy the gate for one commit.
 **Decision:** Every `tests/<subpkg>/` has an empty `__init__.py`, mirroring the package.
 **Why:** `tests/__init__.py` already exists (STRUCTURE.md). Making the subfolders
 packages too keeps pytest's module naming unambiguous as mirrored test files are added.
+
+## 2026-09-17 — Contract shapes (contracts.py)
+**Decision:**
+- Example I/O is `IOExample{input, output}` with pydantic `JsonValue` values, and
+  `CapabilityRequest.examples: list[IOExample]`.
+- `ValidationRecord` holds `request`, `results`, `failures`, and `verdict`
+  (`None` until decided), plus `add(result) -> result`.
+- `ToolArtifact` is `{tool_id, code, metadata}`. `StageResult.category` is `None` on pass.
+- Every type except `ValidationRecord` is frozen, and all of them forbid extra fields.
+**Why:** RunBugRun's input style (stdin vs. function-call) is still unconfirmed.
+`JsonValue` covers both without a contract change later. The stage signature
+`f(artifact, record, sandbox)` has no request parameter, so the record must carry
+the request (S3 needs it). Freezing results supports a deterministic verdict, and
+`extra="forbid"` catches typos in hand-written request JSON.
+**Alternatives rejected:** Separate stdin/func example types, which would decide the
+dataset format before inspecting it. Adding `score` to the record now; it waits for
+S6 and will be raised as a contract change then.
+
+## 2026-09-17 — Config: no invented defaults, no new dependency
+**Decision:** `config.py` reads `SCADS_API_KEY` (as `SecretStr`), `SCADS_BASE_URL`,
+`SCADS_GENERATOR_MODEL`, and `SCADS_JUDGE_MODEL` from the environment over `.env`,
+using a ~20-line parser. Model IDs have no defaults, and identical generator/judge IDs are
+rejected. Sandbox defaults: `python:3.12-slim`, 512m, 128 pids (from `docker_probe.py`),
+10 s exec timeout. No score thresholds yet.
+**Why:** Exact SCADS model IDs aren't known, so a guessed default would be invented
+data (CLAUDE.md rule 7). Thresholds are fit from data in S6. `SecretStr` keeps the key out
+of logs, reprs, and reports. Avoiding pydantic-settings / python-dotenv keeps the
+dependency list unchanged (rule 8).
+**Alternatives rejected:** pydantic-settings or python-dotenv (a new dependency for about 20 lines).
+**Open:** the 10 s exec timeout is an engineering default and should be revisited once real
+RunBugRun run times are measured.

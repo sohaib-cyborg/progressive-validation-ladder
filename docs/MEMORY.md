@@ -126,3 +126,15 @@ Status (fill in after running):
   dataset flowing (critical path).
 
 <!-- Claude Code: add your session entries below this line -->
+
+### Day 1 (2026-09-17) — Sprint 1: skeleton, contracts, config
+- Done + committed: skeleton (Python 3.12.10 `.venv`), `contracts.py`, `config.py`
+  (26 tests, gate green). Detailed log: `docs/reports/sprint-01.md`, plan:
+  `docs/reports/SPRINTS.md`. (Correction: the Day 0 entry's "empty package skeleton"
+  did not exist; it was created today.)
+- Gate is now `mypy --strict toolvalidator data experiments`. mutmut (arm A) will
+  run inside the sandbox. See DECISIONS.md 2026-09-17.
+- Blocked: 1.4 loader (RunBugRun entry not inspected), 1.5 sandbox (docker_probe
+  not run; Docker daemon was off), S1+ (no `sandbox` type for the stage signature yet).
+- Gotcha: SCADS model IDs are not set in `.env` (`SCADS_GENERATOR_MODEL`,
+  `SCADS_JUDGE_MODEL`); required before Sprint 2.
