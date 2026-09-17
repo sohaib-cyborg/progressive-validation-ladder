@@ -3,10 +3,13 @@
 import pytest
 from pydantic import ValidationError
 
+from tests.conftest import FakeSandbox
 from toolvalidator.contracts import (
     CapabilityRequest,
+    ExecResult,
     FailureReport,
     IOExample,
+    Sandbox,
     StageResult,
     ToolArtifact,
     ValidationRecord,
@@ -148,3 +151,26 @@ def test_record_json_round_trip() -> None:
     restored = ValidationRecord.model_validate_json(rec.model_dump_json())
     assert restored == rec
     assert restored.verdict is Verdict.REJECT
+
+
+# --- ExecResult / Sandbox ------------------------------------------------------
+
+
+def test_exec_result_defaults_not_timed_out() -> None:
+    res = ExecResult(stdout="hi\n", stderr="", exit_code=0, duration_s=0.01)
+    assert res.timed_out is False
+
+
+def test_exec_result_rejects_negative_duration() -> None:
+    with pytest.raises(ValidationError):
+        ExecResult(stdout="", stderr="", exit_code=0, duration_s=-1.0)
+
+
+def test_fake_sandbox_satisfies_sandbox_protocol(fake_sandbox: FakeSandbox) -> None:
+    assert isinstance(fake_sandbox, Sandbox)
+
+
+def test_fake_sandbox_records_calls_and_never_executes(fake_sandbox: FakeSandbox) -> None:
+    out = fake_sandbox.run("raise SystemExit(3)", stdin="1\n", timeout_s=2.0)
+    assert out.exit_code == 0  # canned result: the script was not run
+    assert fake_sandbox.calls == [("raise SystemExit(3)", "1\n", 2.0)]

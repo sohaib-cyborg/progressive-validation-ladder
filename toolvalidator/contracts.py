@@ -3,7 +3,9 @@
 Depends on nothing internal. Change shapes deliberately and ask first.
 """
 
+from collections.abc import Callable
 from enum import StrEnum
+from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
@@ -80,3 +82,29 @@ class ValidationRecord(BaseModel):
         """Append a stage result and return it (the stage contract, CLAUDE.md rule 6)."""
         self.results.append(result)
         return result
+
+
+class ExecResult(_Frozen):
+    """Outcome of running one script in the sandbox."""
+
+    stdout: str
+    stderr: str
+    exit_code: int
+    duration_s: float = Field(ge=0)
+    timed_out: bool = False
+
+
+@runtime_checkable
+class Sandbox(Protocol):
+    """The only way stages may execute code. Implemented by ``sandbox/exec.py``.
+
+    ``timeout_s=None`` means the sandbox's configured default.
+    """
+
+    def run(
+        self, script: str, *, stdin: str = "", timeout_s: float | None = None
+    ) -> ExecResult: ...
+
+
+type Stage = Callable[[ToolArtifact, ValidationRecord, Sandbox], StageResult]
+"""Every stage has this shape (CLAUDE.md rule 6)."""
