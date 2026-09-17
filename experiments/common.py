@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict
 
 from data.loaders.runbugrun import RunBugRunEntry, Split, iter_entries
 from toolvalidator.config import Settings
-from toolvalidator.contracts import Sandbox, ToolArtifact, ValidationRecord, Verdict
+from toolvalidator.contracts import Sandbox, Stage, ToolArtifact, ValidationRecord, Verdict
 from toolvalidator.pipeline import run_pipeline, static_stages
 from toolvalidator.sandbox.exec import NoExecutionSandbox
 from toolvalidator.stages import s4_execute
@@ -79,7 +79,7 @@ def evaluate_tool(
     artifact = ToolArtifact(tool_id=f"{entry.entry_id}-{variant}", code=code)
     static = static_stages(settings)
     static_record = run_pipeline(artifact, entry.request, static, NoExecutionSandbox())
-    dynamic_stages = [*static, partial(s4_execute.run, tests=entry.tests)]
+    dynamic_stages: list[Stage] = [*static, partial(s4_execute.run, tests=entry.tests)]
     dynamic_record = run_pipeline(artifact, entry.request, dynamic_stages, sandbox)
     execute_result = next((r for r in dynamic_record.results if r.stage == s4_execute.STAGE), None)
     pass_rate = None if execute_result is None else execute_result.data.get("pass_rate")
