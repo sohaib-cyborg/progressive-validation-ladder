@@ -6,6 +6,7 @@ Nothing here is aspirational. If something wasn't run, the report says so.
 
 | File | What it holds |
 |---|---|
+| [STATUS.md](STATUS.md) | **Start here.** Current state: what is built, methodology, tests run, results and their caveats. |
 | [SPRINTS.md](SPRINTS.md) | The sprint plan: 5 sprints mapped to the 14-day schedule in `docs/PLAN.md`, with exit criteria and preconditions. |
 | [sprint-01.md](sprint-01.md) | Work log for Sprint 1 (the spine). ✅ complete, tag `sprint-1`. |
 | [sprint-02.md](sprint-02.md) | Work log for Sprint 2 (dynamic signals). In progress. |
