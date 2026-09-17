@@ -14,7 +14,7 @@ def test_defaults_with_empty_environment() -> None:
     assert s.llm.api_key is None
     assert s.llm.generator_model is None
     assert s.llm.judge_model is None
-    assert s.sandbox.image == "python:3.12-slim"
+    assert s.sandbox.image == "toolvalidator-sandbox:py3.12"
     assert s.sandbox.mem_limit == "512m"
     assert s.sandbox.pids_limit == 128
     assert s.sandbox.timeout_s > 0

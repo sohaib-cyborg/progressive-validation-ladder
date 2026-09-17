@@ -96,7 +96,7 @@ def test_docker_sandbox_failed_upload_is_sandbox_error() -> None:
 
 
 @pytest.fixture(scope="module")
-def sandbox(docker_client: Any) -> Iterator[DockerSandbox]:
+def sandbox(docker_client: Any, sandbox_image: str) -> Iterator[DockerSandbox]:
     settings = SandboxSettings(max_output_bytes=64 * 1024)
     with provision(docker_client, settings) as container:
         yield DockerSandbox(container, settings)
@@ -146,3 +146,10 @@ def test_real_output_is_capped(sandbox: DockerSandbox) -> None:
 def test_real_large_stdin(sandbox: DockerSandbox) -> None:
     res = sandbox.run("import sys\nprint(len(sys.stdin.read()))", stdin="a" * 1_400_000)
     assert res.stdout == "1400000\n"
+
+
+@pytest.mark.slow
+def test_real_sandbox_image_has_numpy(sandbox: DockerSandbox) -> None:
+    # 1.6% of RunBugRun Python entries import numpy (DECISIONS.md).
+    res = sandbox.run("import numpy; print(numpy.__version__)")
+    assert (res.exit_code, res.stdout.strip()) == (0, "1.26.4")

@@ -37,7 +37,8 @@ class LLMSettings(_Frozen):
 
 class SandboxSettings(_Frozen):
     # Limits match the config verified by docker_probe.py.
-    image: str = "python:3.12-slim"
+    # Built from toolvalidator/sandbox/Dockerfile (python:3.12-slim + numpy + mutmut).
+    image: str = "toolvalidator-sandbox:py3.12"
     mem_limit: str = "512m"
     pids_limit: int = Field(default=128, gt=0)
     timeout_s: float = Field(default=10.0, gt=0)

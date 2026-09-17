@@ -52,7 +52,7 @@ def test_provision_uses_config_and_always_removes() -> None:
 
 
 @pytest.mark.slow
-def test_real_container_is_created_and_destroyed(docker_client: Any) -> None:
+def test_real_container_is_created_and_destroyed(docker_client: Any, sandbox_image: str) -> None:
     with provision(docker_client, SandboxSettings()) as container:
         container.reload()
         assert container.status == "running"

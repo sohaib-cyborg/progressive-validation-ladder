@@ -17,3 +17,18 @@ def docker_client() -> Iterator[Any]:  # Any: the docker SDK ships no type infor
         pytest.skip(f"Docker daemon not reachable: {exc}")
     yield client
     client.close()
+
+
+@pytest.fixture(scope="session")
+def sandbox_image(docker_client: Any) -> str:
+    """The configured sandbox image; skips (with the build command) if it isn't built."""
+    import docker.errors
+
+    from toolvalidator.config import SandboxSettings
+
+    image = SandboxSettings().image
+    try:
+        docker_client.images.get(image)
+    except docker.errors.ImageNotFound:
+        pytest.skip(f"{image} not built: docker build -t {image} toolvalidator/sandbox")
+    return image
