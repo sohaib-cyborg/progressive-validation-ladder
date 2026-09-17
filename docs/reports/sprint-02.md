@@ -41,3 +41,27 @@ scripts yield no mutants", "Experiment scale: seeded subsets + parallel sandboxe
 **Commit:** `29cf054 sandbox: add pinned sandbox image with numpy and mutmut`
 **Open issues / next:** Docker Desktop memory is 1.9 GiB, so 3 parallel sandboxes (Sohaib to raise
 it to 8 GB). Next task: 2.1 LLM client.
+
+---
+
+### 2.1: SCADS LLM client  (2026-09-17)
+**Status:** done
+**What was done:** Tests first (15: role→model resolution, result mapping, missing key/model,
+empty output, JSON extraction incl. fenced/embedded/malformed, 1 real SCADS call per role),
+confirmed failing, implemented `toolvalidator/llm/scads_client.py`. Added `LLMSettings.timeout_s`
+(300 s) and `max_retries` (3). mypy caught untyped `messages` and an un-narrowed `content`, both fixed.
+One test was wrong (a literal newline inside a JSON string); the parser was right to reject it,
+so the test now asserts that rejection explicitly.
+**Commands run + actual output:**
+```
+$ pytest tests/llm (before impl) → ModuleNotFoundError: No module named 'toolvalidator.llm.scads_client'
+$ <gate, 1st> → scads_client.py:61 [arg-type] messages · scads_client.py:72 [arg-type] content
+$ <gate> → Success: no issues found in 20 source files / 112 passed
+  slowest: 53.06s (first real call pair) → 8.44s on the next run
+$ ScadsClient(load_settings().llm).complete(role, "Reply with exactly: OK")
+generator Qwen/Qwen3.8-27B 1.5s completion_tokens= 16 reasoning chars= 46 content= '\n\nOK'
+judge zai-org/GLM-5.3 6.0s completion_tokens= 35 reasoning chars= 138 content= 'OK'
+```
+**Finding:** SCADS latency varies a lot (the same two trivial calls took 53 s once, 8 s later).
+Tier 2 LLM cost must be measured on real prompts before fixing its size.
+**Commit:** `b441c3b llm: add SCADS client with role-pinned models and defensive JSON parsing`
