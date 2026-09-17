@@ -6,7 +6,7 @@ first sessions is to build the skeleton **in dependency order**, test-first, one
 piece at a time. Do NOT scaffold all files at once — build, test, commit, repeat.
 
 Follow this order. Each numbered item is roughly one commit. Run the gate
-(`ruff format . && ruff check . && mypy --strict toolvalidator && pytest -q`)
+(`ruff format . && ruff check . && mypy --strict toolvalidator data experiments && pytest -q`)
 before each commit.
 
 ## Phase 0 — project skeleton (Day 1 morning)

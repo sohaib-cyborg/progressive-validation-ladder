@@ -16,7 +16,7 @@ pip install -e ".[dev]"
 cp .env.example .env          # add your SCADS_API_KEY
 
 # the local gate (run before every commit)
-ruff format . && ruff check . && mypy --strict toolvalidator && pytest -q
+ruff format . && ruff check . && mypy --strict toolvalidator data experiments && pytest -q
 
 # validate one tool
 python -m toolvalidator.cli validate --tool examples/celsius.py --request examples/celsius.json

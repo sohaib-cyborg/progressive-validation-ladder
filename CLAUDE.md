@@ -131,7 +131,7 @@ Run these; don't guess whether code works.
 pip install -e ".[dev]"
 
 # the full local gate — run before every commit
-ruff format . && ruff check . && mypy --strict toolvalidator && pytest -q
+ruff format . && ruff check . && mypy --strict toolvalidator data experiments && pytest -q
 
 # run one stage's tests
 pytest tests/test_sandbox.py -q
