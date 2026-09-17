@@ -35,10 +35,9 @@ RunBugRun entries, with a real sandbox that can execute a script.
 prints a verdict; a syntax-error tool is rejected; gate green. *(Corrected 2026-09-17:
 `broken_celsius.py` has a logic bug, which static-only checks accept by design. See DECISIONS.md.)*
 
-**Status (end of Day 1, 2026-09-17):** ✅ 1.1–1.3, 1.7–1.10 done (static pipeline runs
-end-to-end, 71 tests). A minimal `repair.py` and `NoExecutionSandbox` were added along the way.
-⛔ 1.4 blocked on RunBugRun inspection. ⛔ 1.5–1.6 blocked on `docker_probe.py`.
-Log: [sprint-01.md](sprint-01.md).
+**Status: ✅ COMPLETE (2026-09-17, tag `sprint-1`).** All tasks 1.1–1.10 done, plus a minimal
+`repair.py` and `NoExecutionSandbox`. 96 tests. Static pipeline and Docker sandbox smoke-tested on
+10 real RunBugRun entries. Log: [sprint-01.md](sprint-01.md).
 
 **Reordering allowed:** 1.7–1.9 depend only on contracts, so they can run
 *before* 1.4–1.6 if the dataset or Docker preconditions are still blocked.
@@ -111,9 +110,10 @@ No new code except bug fixes to reproduce a frozen number.
 | ID | Risk | Mitigation / status |
 |---|---|---|
 | R1 | Python 3.12 not installed (only 3.11.1 found on 2026-09-17) | ✅ Resolved 2026-09-17: Sohaib installed 3.12; `.venv` uses Python 3.12.10. |
-| R2 | Docker Desktop daemon not running (2026-09-17, still not running at end of Day 1) | Start Docker Desktop, then run `docker_probe.py` before 1.5. |
+| R2 | Docker Desktop daemon not running (2026-09-17) | ✅ Resolved 2026-09-17: Docker running, `docker_probe.py` ALL CHECKS PASSED. |
 | R3 | mutmut executes tool code, and the probe runs it **on the host**. CLAUDE.md §7 forbids executing tool code outside the container. mutmut 3.x may also not run natively on Windows (unverified). | ✅ Decided 2026-09-17: mutmut runs **inside the sandbox container** for arm A (DECISIONS.md). The probe must still pass before 2.7. |
 | R4 | PLAN.md assumes S0–S3 are "already built", but the fresh start (DECISIONS Day 0) means S3 (generator + judge + LLM client) must be built from scratch in Sprint 2. | Sprint 2 is the most overloaded sprint. If it slips, PLAN §8 slack order applies: drop 6.5 first, then Arm B detail. |
 | R5 | `mypy --strict toolvalidator` does not type-check `data/` or `experiments/`, so the loader (critical path) would go unchecked. | ✅ Decided 2026-09-17: gate widened to `mypy --strict toolvalidator data experiments` (DECISIONS.md). |
 | R6 | Rubber-duck tuning (3.1) and score fit (3.4) are the likeliest overruns (PLAN §8). | Day 10 buffer. |
-| R7 | Cost of the full-dataset runs. S2 measured at ~0.30 s (bandit subprocess) + ~0.05 s (mypy in-process) per small file. **Estimate:** 145,400 × ~0.35 s ≈ 14 h serial for static-only alone; dynamic stages add much more. | Decide subsample size and/or parallelism before 2.6. Measure real per-tool cost on RunBugRun entries first. |
+| R7 | Cost of full-dataset runs. **Measured:** static S1+S2 ≈ 0.5 s per real tool; one sandbox run ≈ 0.3 s. **Estimate:** 145,370 entries × 2 versions × 0.5 s ≈ 40 h static-only; dynamic with ~100 tests/program run one-by-one would be far worse. | S4 must batch all test inputs of a program into one runner call. Decide subsample size and/or parallelism before 2.6 (needs Sohaib). |
+| R8 | Sandbox image lacks numpy; 1.6% of valid entries import it and would fail even when correct. | Proposal: custom sandbox image (python:3.12-slim + numpy + mutmut). Needs Sohaib's OK (new file outside STRUCTURE.md). |

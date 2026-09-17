@@ -103,6 +103,13 @@ a report. Evaluated on the **RunBugRun** dataset, Python subset only.
   (`<h3>Sample Input N</h3><pre>`, bilingual with a `lang-en` span) and AOJ
   (`<H2>Sample Input N</H2>` + `<H2>Output for the Sample Input N</H2>`).
 - Raw downloads live in `data/runbugrun_py/raw/` (git-ignored); sha256 in sprint-01.md.
+- **Expected outputs are not newline-consistent:** 17,108/321,418 (5.3%) lack a trailing
+  newline, 1,008 end in spaces/tabs, 0 contain `
+`, 8 are empty. S4 must normalise trailing
+  whitespace or it will fail correct programs.
+- **numpy:** 1.6% of valid entries import it; `python:3.12-slim` lacks it (DECISIONS.md, OPEN).
+- **Sandbox cost (measured):** ~0.3 s per `DockerSandbox.run`; static S1+S2 ~0.5 s per real
+  tool. S4 must batch test cases per tool.
 - Mutation testing: **mutmut 3.8** (NOT 2.4). v3 API needs a `[mutmut]` section
   with `source_paths=` (the old `--paths-to-mutate` CLI flag is gone;
   `paths_to_mutate` is deprecated). No clean Python API → drive it as a
@@ -117,8 +124,9 @@ a report. Evaluated on the **RunBugRun** dataset, Python subset only.
   (configurable) and records all findings.
 - **In-process mypy reads this repo's pyproject `strict = true`** unless called with
   `--config-file=`. S2 passes it. Never drop that flag.
-- **Cost:** S2 ≈ 0.35 s/tool, so full RunBugRun static-only ≈ 14 h serial (estimate).
-  Decide subsample/parallelism before running experiments (SPRINTS.md R7).
+- **Cost:** static S1+S2 ≈ 0.5 s per real RunBugRun tool (measured on 20). Full dataset,
+  both versions, static-only ≈ 40 h serial (estimate). Decide subsample/parallelism before
+  running experiments (SPRINTS.md R7).
 - Rubber-duck output is noisy → tune the prompt on a dev split, report inter-run
   agreement.
 - LLM JSON responses can be malformed → parse defensively in `scads_client.py`.
@@ -136,7 +144,7 @@ Two probe scripts are in the repo root. Run them on the dev machine:
 
 Status (fill in after running):
 - [x] docker_probe.py passed on dev machine (2026-09-17, ALL CHECKS PASSED)
-- [ ] mutmut_probe.py passed on dev machine
+- [ ] mutmut_probe.py passed on dev machine (not run yet; must also pass INSIDE the sandbox before task 2.7)
 - [x] RunBugRun Python count confirmed (145.4K — plenty)  ✅ done via research
 - [x] Inspected a real RunBugRun Python entry; input style = **stdin/stdout** (2026-09-17)
 
@@ -165,3 +173,11 @@ Status (fill in after running):
   (docker_probe not run; daemon off). Next: whichever unblocks first, then Sprint 2.
 - SCADS model IDs are not set in `.env` (`SCADS_GENERATOR_MODEL`, `SCADS_JUDGE_MODEL`);
   required before Sprint 2.
+
+### Day 1 cont. (2026-09-17) — Sprint 1 completed
+- Pre-flight: docker_probe passed; SCADS models pinned (Qwen3.8-27B / GLM-5.3); RunBugRun
+  inspected (stdin/stdout, no descriptions → CodeNet descriptions).
+- Done + committed: RunBugRun loader, sandbox container + DockerSandbox (real-Docker tests),
+  max_output_bytes. 96 tests, gate green. Smoke on 10 real entries OK. Tagged `sprint-1`.
+- Next: Sprint 2 (LLM client, testgen, S4 with batched runs + output normalisation).
+  Open for Sohaib: numpy sandbox image; subsample/parallelism (R7); run mutmut_probe.

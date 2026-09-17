@@ -270,3 +270,60 @@ CodeNet's terms of use before redistributing anything.
 commit (SPRINTS.md status + log summary) and tag it `sprint-N`.
 **Why:** Sohaib asked for commits at every sprint completion. Tags make each sprint's
 state reproducible with `git checkout sprint-N`.
+
+## 2026-09-17 — RunBugRun loader behaviour
+**Decision:** `data/loaders/runbugrun.py` yields `RunBugRunEntry{entry_id, split, problem_id,
+request, buggy_code, fixed_code, tests, bug_labels}`. Rows are validated with pydantic.
+`labels: null` becomes `[]`. An entry is skipped, and counted in `LoadReport`, when its problem
+has no (or empty) description or no tests. The description is the tag-stripped HTML text.
+Samples are paired by number from `<h2|h3>` headings directly followed by `<pre>`: "Sample
+Input N" and "Sample Output N" / "Output for the Sample Input N". The HTML-mandated newline
+after `<pre>` is dropped. No language splitting.
+**Why (inspected on real files):** No description file mixes `lang-en` and `lang-ja`
+(1,503 en-only, 13 ja-only, 2,483 neither), so splitting is unnecessary. The 13 ja-only
+statements are kept as-is. `labels` is null for 64/2,054 valid rows. Real valid split:
+2,053/2,054 yielded (1 skipped, no description), 2,046 with ≥1 example, 2.4 s.
+**Alternatives rejected:** An HTML parser dependency (BeautifulSoup etc.), unnecessary for two
+regular markups.
+
+## 2026-09-17 — Sandbox execution design (DockerSandbox)
+**Decision:**
+- One container per sandbox (`provision`), idling on `sleep infinity` as uid/gid 65534.
+- Each `run` uploads `runner.py`, `script.py`, `stdin.txt` to `/tmp/tv-run-N/` with
+  `put_archive` (owned by nobody), then `exec_run`s the runner.
+- The runner (trusted code we write) starts the tool in a new session, kills the whole
+  process group on timeout or completion, and caps stdout/stderr with `RLIMIT_FSIZE`.
+  It prints JSON, which becomes `ExecResult`. A signal exit is reported as `128+signal`
+  (a timeout gives 137).
+- Upload failures, Docker API errors, and unreadable runner output raise `SandboxError`.
+  They never produce a verdict.
+- Root filesystem stays writable (container layer only, destroyed after). No mounts.
+- New setting: `sandbox.max_output_bytes` = 1 MiB per stream.
+**Why (measured on real Docker, 2026-09-17):**
+- Inputs reach 1.37 MB, so environment variables or `-c` arguments can't carry stdin.
+- The docker SDK's stdin attach is awkward over a Windows named pipe, and `put_archive` works.
+- A capped output file stops an infinite print loop from exhausting host memory:
+  a flood test was stopped at exactly the cap.
+- Verified: stdin/stdout/stderr, exit codes, a 1 s timeout (killed, 137), network blocked,
+  uid 65534, 1.4 MB stdin, no leftover containers.
+- Cost: first container create ~8 s (cold), then ~0.25–0.33 s per run.
+**Alternatives rejected:** A new container per run (too slow). `timeout`+shell pipelines
+(no reliable output cap). A read-only root with tmpfs (`put_archive` can't write into
+tmpfs mounts).
+**Open:** No CPU quota yet (only mem/pids). A per-run cost of ~0.3 s × ~100 tests per program
+is too slow for the full dataset, so S4 should batch many stdin cases into one runner call (R7).
+
+## 2026-09-17 — Real-Docker tests skip (visibly) when the daemon is down
+**Decision:** Tests that need Docker use the session fixture `docker_client`
+(`tests/sandbox/conftest.py`), which calls `pytest.skip` with the reason if `ping()` fails.
+They are marked `slow`.
+**Why:** The gate must still run when Docker Desktop is off. `pytest -rs` shows the skip
+reason, so a skipped sandbox test is never silently mistaken for a pass.
+
+## 2026-09-17 — OPEN: sandbox image lacks numpy
+**Finding:** 33/2,054 valid entries (1.6%) import `numpy`, which `python:3.12-slim` doesn't
+have. Correct programs would fail in the sandbox and be mislabelled. Other non-stdlib names
+seen (`fracions`, `collection`, `Math`, …) are typos, i.e. real bugs.
+**Proposal (needs Sohaib's OK, since it adds a file outside STRUCTURE.md):** a small
+`sandbox/Dockerfile` building `toolvalidator-sandbox:py3.12` = python:3.12-slim + pinned numpy
+(+ mutmut for arm A). `SandboxSettings.image` already makes this a config change.

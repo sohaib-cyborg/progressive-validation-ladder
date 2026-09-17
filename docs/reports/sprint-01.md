@@ -308,3 +308,104 @@ descriptions: valid problems covered 670/671 · problems-with-tests covered 3,92
 "Commit + tag at every sprint completion".
 **Open issues / next:** `mutmut_probe.py` has not been run yet (needed before 2.7, inside the
 sandbox). Next: 1.4 loader, 1.5 container, 1.6 exec, then the Sprint 1 completion commit + tag.
+
+---
+
+### 1.4: RunBugRun loader  (2026-09-17)
+**Status:** done
+**What was done:** Checked the real HTML first (language spans, sample markup). The initial
+test fixture assumed a bilingual en+ja layout that does not occur in the data and was
+corrected before implementing. Tests first (9, incl. one real-data test that skips if raw
+files are absent), confirmed failing, implemented `data/loaders/runbugrun.py` (177 lines).
+A literal NBSP was written into a regex, caught by ruff RUF001, and replaced with an ASCII escape.
+**Commands run + actual output:**
+```
+$ lang span ordering over all 3,999 description files
+{'none': 2483, 'has 入力例': 469, 'heading not directly followed by pre, then Sample': 0, 'en only': 1503, 'ja only': 13}
+$ pytest tests/data (before impl) → ModuleNotFoundError: No module named 'data.loaders.runbugrun'
+$ <gate> → Success: no issues found in 18 source files / 80 passed, gate exit=0
+$ iter_entries(raw, split="valid")
+valid: LoadReport(read=2054, yielded=2053, skipped_no_description=1, skipped_no_tests=0) in 2.4s
+entries with >=1 example: 2046 / 2053 · distinct problems: 670
+p02718 examples: [('4 1\n5 4 2 1\n', 'Yes\n'), ('3 2\n380 19 1\n', 'No\n')] · tests: 132
+$ tests_all output endings
+{'total': 321418, 'ends with \n': 304310, 'ends with space/tab': 1008, 'contains \r': 0, 'empty': 8}
+```
+**Decisions:** DECISIONS.md "RunBugRun loader behaviour".
+**Commit:** `eae235e data: RunBugRun Python loader`
+
+---
+
+### 1.5–1.6: Sandbox container + DockerSandbox  (2026-09-17)
+**Status:** done
+**What was done:**
+- Measured test I/O sizes and third-party imports.
+- Prototyped the runner design against real Docker in the scratchpad.
+- Implemented test-first: `max_output_bytes` setting (1 test assertion),
+  `sandbox/container.py` (3 tests incl. 1 real Docker), `DockerSandbox` in `sandbox/exec.py`
+  (14 tests incl. 7 real Docker). One lint fix (runner line > 100 chars).
+**Commands run + actual output:**
+```
+$ sizes over tests_all
+input bytes  median/p99/max: 24 710 1374658
+output bytes median/p99/max: 5 200 180253
+valid entries importing non-stdlib modules: 38 / 2054
+non-stdlib modules: [('numpy', 33), ('fraction', 1), ('fracions', 1), ('future_builtins', 1), ('Math', 1), ('collection', 1)]
+
+$ scratchpad prototype (real Docker)
+create: 7.99s
+echo      exit 0 | 0.30s  {'stdout': '42\n', 'stderr': 'err\n', 'exit_code': 0, 'timed_out': False}
+exit3     0.25s  exit_code 3
+timeout   1.21s  exit_code 137, timed_out True, duration_s 1.002
+flood     0.26s  len stdout: 1048576, exit_code 1 (write past RLIMIT_FSIZE)
+network   0.58s  exit_code 1 (urlopen failed)
+whoami    0.24s  '65534 65534\n'
+big_stdin 0.33s  '1400000\n'
+remove: 0.08s
+
+$ <gate> (config)    → 80 passed, gate exit=0
+$ <gate> (container) → Success: no issues found in 19 source files / 83 passed, no skips
+$ <gate> (exec)      → Success: no issues found in 19 source files / 96 passed, no skips
+  slowest: 3.33s real loader test · 1.34s real timeout test · 0.72s real network test
+$ docker ps -a --filter label=toolvalidator=sandbox → leftover sandbox containers: 0
+```
+**Decisions:** DECISIONS.md "Sandbox execution design", "Real-Docker tests skip (visibly)",
+"OPEN: sandbox image lacks numpy".
+**Commit:** `817fa93 config: add sandbox max_output_bytes`, `c3bf326 sandbox: provision and
+destroy the locked-down container`, `c909d58 sandbox: run scripts in the container with timeout
+and output caps`
+
+---
+
+### Sprint 1 completion check  (2026-09-17)
+**Smoke on 10 real RunBugRun entries** (scratchpad script, not part of the repo; NOT an
+experimental result: 10 entries, 3 tests each, naive rstrip comparison):
+```
+loader: LoadReport(read=10, yielded=10, skipped_no_description=0, skipped_no_tests=0)
+static  (S1+S2, NoExecutionSandbox): all 20 tools (10 buggy + 10 fixed) → ACCEPT
+static: 20 tools in 9.9s
+sandbox entry 7249  p00000: buggy 0/1 | fixed 1/1
+sandbox entry 9080  p00001: buggy 0/3 | fixed 3/3
+sandbox entry 10105 p00003: buggy 0/3 | fixed 3/3
+sandbox entry 10377 p00002: buggy 0/3 | fixed 3/3
+sandbox entry 10378 p00002: buggy 0/3 | fixed 3/3
+sandbox entry 12337 p00007: buggy 0/3 | fixed 3/3
+sandbox entry 13516 p00010: buggy 0/3 | fixed 3/3
+sandbox entry 14071 p00012: buggy 3/3 | fixed 3/3
+sandbox entry 14826 p00016: buggy 0/3 | fixed 3/3
+sandbox entry 18669 p00028: buggy 0/3 | fixed 3/3
+sandbox: 56 runs in 18.4s
+leftover containers: 0
+```
+**Exit criteria:**
+| Criterion | Status |
+|---|---|
+| CLI prints a verdict for `examples/celsius.py` | ✅ ACCEPT, exit 0 |
+| Syntax-error tool rejected | ✅ `tests/test_cli.py::test_syntax_error_is_rejected` |
+| Static pipeline on a few real RunBugRun entries | ✅ 20 tools above |
+| Real sandbox executes a script | ✅ 7 real-Docker exec tests + 56 real runs above |
+| Gate green | ✅ 96 passed, 0 skipped |
+
+**Sprint 1: COMPLETE.** Tagged `sprint-1`.
+**Carried into Sprint 2:** numpy sandbox image (awaiting Sohaib), `mutmut_probe.py` (not run),
+subsample/parallelism decision (R7), batched runs + output normalisation in S4.
