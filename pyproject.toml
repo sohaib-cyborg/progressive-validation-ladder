@@ -1,0 +1,80 @@
+[project]
+name = "toolvalidator"
+version = "0.1.0"
+description = "Progressive validation of LLM-synthesized tools (Project D)"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.6",
+    "docker>=7.0",          # sandbox
+    "openai>=1.30",         # SCADS is OpenAI-compatible
+    "bandit>=1.7",          # S2 static security
+    "mypy>=1.9",            # S2 static types (also dev tool)
+    "mutmut>=3.8",         # S5 mutation arm A (v3 API: needs source_paths in config, subprocess-driven)
+    "scikit-learn>=1.4",    # S6 logistic regression + calibration
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.1",
+    "ruff>=0.4",
+]
+
+[project.scripts]
+toolvalidator = "toolvalidator.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+# ---------------------------------------------------------------------------
+# Ruff — lint + format. Run: ruff check . && ruff format .
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W",   # pyflakes + pycodestyle
+    "I",             # isort (import order)
+    "N",             # pep8-naming
+    "UP",            # pyupgrade (modern syntax)
+    "B",             # bugbear (common bugs)
+    "SIM",           # simplify
+    "RUF",           # ruff-specific
+]
+# Enforce docstrings on public modules/functions via pydocstyle subset if desired:
+# "D" rules can be added once velocity allows.
+
+[tool.ruff.lint.isort]
+known-first-party = ["toolvalidator"]
+
+# ---------------------------------------------------------------------------
+# mypy — strict. Run: mypy --strict toolvalidator
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+no_implicit_optional = true
+show_error_codes = true
+# third-party libs without stubs:
+[[tool.mypy.overrides]]
+module = ["docker.*", "mutmut.*", "bandit.*", "sklearn.*"]
+ignore_missing_imports = true
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-q --strict-markers"
+testpaths = ["tests"]
+markers = [
+    "slow: tests that spin up real containers or call the real LLM (deselect with -m 'not slow')",
+]

@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Secrets
+.env
+
+# Data & results (large / regenerable)
+data/runbugrun_py/
+results/
+*.pkl
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
