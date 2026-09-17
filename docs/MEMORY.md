@@ -93,6 +93,16 @@ a report. Evaluated on the **RunBugRun** dataset, Python subset only.
   **subprocess**: write tool+tests+`setup.cfg` to a temp dir, run `mutmut run`,
   parse `mutmut results` for the kill count. Confirmed working on single-function
   snippets. This makes `mutation/arm_a_mutmut.py` a subprocess orchestrator.
+  **Update 2026-09-17:** that subprocess runs *inside the sandbox container*, not on
+  the host (it executes tool code). See DECISIONS.md.
+- **bandit severities are not what you'd guess** (bandit 1.9.4, measured): `eval`,
+  `exec`, `pickle.loads` = MEDIUM; `os.system(var)`, `shell=True` with a variable,
+  `hashlib.md5` = HIGH; `__import__("os").popen` = not flagged. S2 rejects at HIGH
+  (configurable) and records all findings.
+- **In-process mypy reads this repo's pyproject `strict = true`** unless called with
+  `--config-file=`. S2 passes it. Never drop that flag.
+- **Cost:** S2 ≈ 0.35 s/tool, so full RunBugRun static-only ≈ 14 h serial (estimate).
+  Decide subsample/parallelism before running experiments (SPRINTS.md R7).
 - Rubber-duck output is noisy → tune the prompt on a dev split, report inter-run
   agreement.
 - LLM JSON responses can be malformed → parse defensively in `scads_client.py`.
@@ -127,14 +137,15 @@ Status (fill in after running):
 
 <!-- Claude Code: add your session entries below this line -->
 
-### Day 1 (2026-09-17) — Sprint 1: skeleton, contracts, config
-- Done + committed: skeleton (Python 3.12.10 `.venv`), `contracts.py`, `config.py`
-  (26 tests, gate green). Detailed log: `docs/reports/sprint-01.md`, plan:
-  `docs/reports/SPRINTS.md`. (Correction: the Day 0 entry's "empty package skeleton"
-  did not exist; it was created today.)
-- Gate is now `mypy --strict toolvalidator data experiments`. mutmut (arm A) will
-  run inside the sandbox. See DECISIONS.md 2026-09-17.
-- Blocked: 1.4 loader (RunBugRun entry not inspected), 1.5 sandbox (docker_probe
-  not run; Docker daemon was off), S1+ (no `sandbox` type for the stage signature yet).
-- Gotcha: SCADS model IDs are not set in `.env` (`SCADS_GENERATOR_MODEL`,
-  `SCADS_JUDGE_MODEL`); required before Sprint 2.
+### Day 1 (2026-09-17) — Sprint 1: the spine
+- Done + committed: skeleton (Python 3.12.10 `.venv`), contracts (+ `Sandbox`
+  Protocol), config, S1 parse, S2 static, repair (minimal), pipeline,
+  `NoExecutionSandbox`, CLI + examples. 71 tests, gate green. The static pipeline runs
+  end-to-end via the CLI. Log: `docs/reports/sprint-01.md`, plan: `docs/reports/SPRINTS.md`.
+  (Correction: the Day 0 "empty package skeleton" did not exist; it was created today.)
+- Gate is now `mypy --strict toolvalidator data experiments`. mutmut runs in the
+  sandbox. bandit rejects at HIGH (configurable). See DECISIONS.md 2026-09-17.
+- Still blocked: 1.4 loader (RunBugRun entry not inspected), 1.5–1.6 Docker sandbox
+  (docker_probe not run; daemon off). Next: whichever unblocks first, then Sprint 2.
+- SCADS model IDs are not set in `.env` (`SCADS_GENERATOR_MODEL`, `SCADS_JUDGE_MODEL`);
+  required before Sprint 2.

@@ -32,7 +32,13 @@ RunBugRun entries, with a real sandbox that can execute a script.
 | 1.10 | CLI + smoke examples (step 11) | `cli.py`, `examples/*` | 1.9 |
 
 **Exit criteria:** `python -m toolvalidator.cli validate --tool examples/celsius.py --request examples/celsius.json`
-prints a verdict; the broken example is rejected; gate green.
+prints a verdict; a syntax-error tool is rejected; gate green. *(Corrected 2026-09-17:
+`broken_celsius.py` has a logic bug, which static-only checks accept by design. See DECISIONS.md.)*
+
+**Status (end of Day 1, 2026-09-17):** ✅ 1.1–1.3, 1.7–1.10 done (static pipeline runs
+end-to-end, 71 tests). A minimal `repair.py` and `NoExecutionSandbox` were added along the way.
+⛔ 1.4 blocked on RunBugRun inspection. ⛔ 1.5–1.6 blocked on `docker_probe.py`.
+Log: [sprint-01.md](sprint-01.md).
 
 **Reordering allowed:** 1.7–1.9 depend only on contracts, so they can run
 *before* 1.4–1.6 if the dataset or Docker preconditions are still blocked.
@@ -84,7 +90,7 @@ computed only on held-out data.
 | 4.1 | S7 MCP schema generation + accuracy experiment (§6.4) | `stages/s7_mcp_schema.py`, `experiments/run_mcp_accuracy.py` |
 | 4.2 | Test-gen strategy comparison, Arm A vs. Arm B (§6.2) | `experiments/run_testgen_strategies.py` |
 | 4.3 | (Optional) judge independence (§6.5): **first thing dropped** if late | `experiments/run_judge_independence.py` |
-| 4.4 | Repair signals | `repair.py` + test |
+| 4.4 | Richer repair signals (minimal `repair.py` exists since Sprint 1) | `repair.py` + test |
 | 4.5 | **Freeze all results**; Day 10 = buffer / re-runs | — |
 
 **Exit criteria:** every number and figure the report needs exists in `results/`
@@ -105,8 +111,9 @@ No new code except bug fixes to reproduce a frozen number.
 | ID | Risk | Mitigation / status |
 |---|---|---|
 | R1 | Python 3.12 not installed (only 3.11.1 found on 2026-09-17) | ✅ Resolved 2026-09-17: Sohaib installed 3.12; `.venv` uses Python 3.12.10. |
-| R2 | Docker Desktop daemon not running (2026-09-17) | Start Docker Desktop, then run `docker_probe.py` before 1.5. |
+| R2 | Docker Desktop daemon not running (2026-09-17, still not running at end of Day 1) | Start Docker Desktop, then run `docker_probe.py` before 1.5. |
 | R3 | mutmut executes tool code, and the probe runs it **on the host**. CLAUDE.md §7 forbids executing tool code outside the container. mutmut 3.x may also not run natively on Windows (unverified). | ✅ Decided 2026-09-17: mutmut runs **inside the sandbox container** for arm A (DECISIONS.md). The probe must still pass before 2.7. |
 | R4 | PLAN.md assumes S0–S3 are "already built", but the fresh start (DECISIONS Day 0) means S3 (generator + judge + LLM client) must be built from scratch in Sprint 2. | Sprint 2 is the most overloaded sprint. If it slips, PLAN §8 slack order applies: drop 6.5 first, then Arm B detail. |
 | R5 | `mypy --strict toolvalidator` does not type-check `data/` or `experiments/`, so the loader (critical path) would go unchecked. | ✅ Decided 2026-09-17: gate widened to `mypy --strict toolvalidator data experiments` (DECISIONS.md). |
 | R6 | Rubber-duck tuning (3.1) and score fit (3.4) are the likeliest overruns (PLAN §8). | Day 10 buffer. |
+| R7 | Cost of the full-dataset runs. S2 measured at ~0.30 s (bandit subprocess) + ~0.05 s (mypy in-process) per small file. **Estimate:** 145,400 × ~0.35 s ≈ 14 h serial for static-only alone; dynamic stages add much more. | Decide subsample size and/or parallelism before 2.6. Measure real per-tool cost on RunBugRun entries first. |

@@ -149,3 +149,83 @@ dependency list unchanged (rule 8).
 **Alternatives rejected:** pydantic-settings or python-dotenv (a new dependency for about 20 lines).
 **Open:** the 10 s exec timeout is an engineering default and should be revisited once real
 RunBugRun run times are measured.
+
+## 2026-09-17 — Sandbox is a Protocol in contracts.py
+**Decision:** `contracts.py` defines `ExecResult{stdout, stderr, exit_code, duration_s, timed_out}`,
+a `runtime_checkable` `Sandbox` Protocol with `run(script, *, stdin="", timeout_s=None) -> ExecResult`,
+and `type Stage = Callable[[ToolArtifact, ValidationRecord, Sandbox], StageResult]`.
+`tests/conftest.py` provides `FakeSandbox`, which records calls and never executes anything.
+**Why:** The stage signature needs a sandbox type before Docker is available. A
+Protocol lets S1, S2, and the pipeline be built and tested now, and `sandbox/exec.py`
+implements it later. Approved by Sohaib (contract change, CLAUDE.md rule 8).
+**Alternatives rejected:** Waiting for the Docker sandbox, which would block Sprint 1 on the probe.
+
+## 2026-09-17 — S1 parse: parser overflow is a failure; empty code passes
+**Decision:** S1 maps `SyntaxError` (including `IndentationError` and null bytes) to
+`syntax_error` with `data.line` / `data.error_type`. `MemoryError` / `RecursionError`
+from the parser maps to `too_complex`. Empty code passes S1.
+**Why:** Measured on CPython 3.12.10: `ast.parse("-"*200000 + "1")` raises
+`MemoryError: Parser stack overflowed`, not SyntaxError. Without handling it, a
+pathological tool would crash the pipeline (rule 6). Empty code is syntactically valid.
+The spec for S1 is "SyntaxError → reject", so emptiness is left to dynamic stages.
+**Open:** Under the static-only configuration an empty tool is ACCEPTED. Revisit if it
+appears in RunBugRun.
+
+## 2026-09-17 — S2 static: bandit threshold, mypy mode, how analyzers run
+**Decision:**
+- bandit rejects at or above `StaticSettings.bandit_reject_severity`
+  (default `HIGH`, per the plan). Every finding at every severity is stored in
+  `data.bandit`, so experiments can re-threshold offline. Confirmed by Sohaib.
+- mypy is a soft signal only, run with `--check-untyped-defs --ignore-missing-imports
+  --no-site-packages --config-file=` (empty). Confirmed by Sohaib.
+- bandit runs as a subprocess (`-f json`, cwd = temp dir). mypy runs in-process via `mypy.api`.
+- If an analyzer crashes, times out, or returns unreadable output, S2 raises `StaticAnalysisError`
+  and does **not** return a failed StageResult.
+**Why (measured 2026-09-17, bandit 1.9.4, mypy 2.3.1):**
+- bandit severities: `subprocess.call(var, shell=True)` HIGH, `os.system(var)` HIGH,
+  `hashlib.md5` HIGH (a false alarm for tool safety), `eval(input())` MEDIUM, `exec` MEDIUM,
+  `pickle.loads` MEDIUM, `__import__("os").popen` not flagged. The threshold therefore
+  materially changes RQ1/RQ2, so it is a recorded, configurable choice.
+- Without `--config-file=`, in-process mypy picked up this repo's `strict = true`
+  and reported "Function is missing a type annotation" on tool code. Verified, then fixed.
+- `--check-untyped-defs` is needed to find `"a" + 1` inside an unannotated function
+  (verified with and without the flag). `--strict` would mostly measure "is it annotated?".
+- Timing per call: bandit subprocess ~0.30 s. mypy subprocess ~0.26 s vs.
+  in-process ~0.05 s (warm cache), so mypy runs in-process.
+- An analyzer crash is our infrastructure failing. Rejecting the tool for it would put
+  false rejections into the results (rule 7, honesty).
+**Alternatives rejected:** MEDIUM+ threshold (likely false rejections on RunBugRun code
+using `eval(input())`). mypy `--strict`. Plain default mypy (skips untyped bodies).
+
+## 2026-09-17 — Minimal repair.py pulled forward from Sprint 4
+**Decision:** `repair.failure_report(result)` maps a failed StageResult to a
+FailureReport (`message = detail`, `line = data.line` if it is a positive int, else
+None; missing category → `"unspecified"`). Richer repair signals remain Sprint 4 (task 4.4).
+**Why:** CLAUDE.md §4 requires a FailureReport on short-circuit, and STRUCTURE.md puts
+that job in `repair.py`. Writing it in `pipeline.py` would mean moving it later.
+
+## 2026-09-17 — Pipeline semantics before S6
+**Decision:** `run_pipeline` runs stages in order. The first `passed=False` gives REJECT
+plus one FailureReport, and later stages don't run. If all pass, the verdict is ACCEPT.
+An empty stage list raises. A stage that doesn't add its own result to the record raises.
+`static_stages(settings)` = `[s1_parse.run, partial(s2_static.run, reject_severity=…)]`.
+**Why:** ACCEPT on all-pass is exactly the static-only configuration of PLAN §6.1.
+NEEDS_REVIEW needs the score (S6), so there is a `TODO(scope)` in `pipeline.py`. Raising on an
+empty stage list makes "accepted without any check" impossible. The record check
+enforces rule 6 at runtime.
+
+## 2026-09-17 — NoExecutionSandbox for static-only runs
+**Decision:** `sandbox/exec.py` has `NoExecutionSandbox`, whose `run` raises
+`ExecutionNotAllowedError`. The CLI uses it with the static stages. The Docker sandbox will
+be added to the same module (task 1.6).
+**Why:** The RQ1 "naive, no sandbox" and RQ2 "static-only" configurations must
+never execute tool code. This makes that guaranteed, not just true today.
+
+## 2026-09-17 — CLI contract and smoke examples
+**Decision:** `python -m toolvalidator.cli validate --tool F --request R` prints the
+ValidationRecord JSON. Exit codes: 0 ACCEPT, 1 REJECT, 2 usage/input error (argparse
+convention), 3 NEEDS_REVIEW. `examples/broken_celsius.py` has a **logic bug**
+(`c * 5/9 + 32`), not a syntax error, and the static-only CLI ACCEPTS it.
+**Why:** A logic bug is the useful broken example for S4 and later stages, and it
+illustrates the RQ2 gap. The reject path is tested with a temporary syntax-error file.
+The Sprint 1 exit criterion in SPRINTS.md was corrected accordingly.
