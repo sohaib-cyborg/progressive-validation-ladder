@@ -12,7 +12,7 @@ from functools import partial
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, JsonValue
 
 from data.loaders.runbugrun import RunBugRunEntry, Split, iter_entries
 from toolvalidator.config import Settings
@@ -97,6 +97,49 @@ def evaluate_tool(
         category_dynamic=_category(dynamic_record),
         pass_rate=pass_rate if isinstance(pass_rate, float) else None,
     )
+
+
+def summarize(outcomes: Sequence[ToolOutcome]) -> dict[str, JsonValue]:
+    """RQ1/RQ2 metrics per configuration: slip rate, false rejections, per-category recall.
+
+    ``unusable_fixed`` counts fixed tools that fail their own dataset tests in our
+    sandbox: an upper bound on label noise, reported rather than hidden.
+    """
+    if not outcomes:
+        raise ValueError("no outcomes to summarize")
+    buggy = [o for o in outcomes if not o.is_correct]
+    fixed = [o for o in outcomes if o.is_correct]
+    return {
+        "n_tools": len(outcomes),
+        "n_buggy": len(buggy),
+        "n_fixed": len(fixed),
+        "unusable_fixed": sum(1 for o in fixed if o.pass_rate is not None and o.pass_rate < 1.0),
+        "static": _config_metrics(buggy, fixed, static=True),
+        "dynamic": _config_metrics(buggy, fixed, static=False),
+    }
+
+
+def _config_metrics(
+    buggy: Sequence[ToolOutcome], fixed: Sequence[ToolOutcome], *, static: bool
+) -> dict[str, JsonValue]:
+    def verdict(outcome: ToolOutcome) -> str:
+        return outcome.verdict_static if static else outcome.verdict_dynamic
+
+    by_category: dict[str, list[bool]] = {}
+    for outcome in buggy:
+        for prefix in {label.split(".")[0] for label in outcome.bug_labels}:
+            by_category.setdefault(prefix, []).append(verdict(outcome) == "REJECT")
+    return {
+        "slip_rate": _rate([verdict(o) == "ACCEPT" for o in buggy]),
+        "false_rejection_rate": _rate([verdict(o) == "REJECT" for o in fixed]),
+        "recall_by_category": {
+            category: _rate(flags) for category, flags in sorted(by_category.items())
+        },
+    }
+
+
+def _rate(flags: Sequence[bool]) -> float | None:
+    return sum(flags) / len(flags) if flags else None
 
 
 def worker_count(cpus: int, docker_mem_bytes: int, *, mem_limit_bytes: int) -> int:

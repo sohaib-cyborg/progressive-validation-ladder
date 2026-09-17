@@ -10,6 +10,7 @@ from experiments.common import (
     ToolOutcome,
     evaluate_tool,
     sample_entries,
+    summarize,
     worker_count,
     write_jsonl,
 )
@@ -123,3 +124,78 @@ def test_write_jsonl_round_trip(tmp_path: Path) -> None:
     rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
     assert rows[0]["entry_id"] == 4
     assert ToolOutcome.model_validate(rows[0]) == outcomes[0]
+
+
+# --- summarize -------------------------------------------------------------------
+
+
+def _outcome(**kw: object) -> ToolOutcome:
+    base: dict[str, object] = {
+        "entry_id": 1,
+        "problem_id": "p1",
+        "split": "valid",
+        "variant": "buggy",
+        "is_correct": False,
+        "n_tests": 3,
+        "bug_labels": ["literal.number.integer.change"],
+        "verdict_static": "ACCEPT",
+        "category_static": None,
+        "verdict_dynamic": "REJECT",
+        "category_dynamic": "wrong_output",
+        "pass_rate": 0.0,
+    }
+    return ToolOutcome.model_validate(base | kw)
+
+
+def test_summarize_slip_and_false_rejection_rates() -> None:
+    outcomes = [
+        _outcome(entry_id=1),  # buggy: static accepts (slip), dynamic rejects
+        _outcome(entry_id=2, verdict_static="REJECT", category_static="syntax_error"),
+        _outcome(
+            entry_id=3,
+            variant="fixed",
+            is_correct=True,
+            verdict_dynamic="ACCEPT",
+            category_dynamic=None,
+            pass_rate=1.0,
+        ),
+        _outcome(  # a fixed tool wrongly rejected by dynamic checking
+            entry_id=4,
+            variant="fixed",
+            is_correct=True,
+            verdict_dynamic="REJECT",
+            category_dynamic="wrong_output",
+            pass_rate=0.5,
+        ),
+    ]
+    summary = summarize(outcomes)
+    assert summary["n_tools"] == 4
+    assert summary["n_buggy"] == 2
+    assert summary["n_fixed"] == 2
+    assert summary["static"]["slip_rate"] == 0.5  # 1 of 2 buggy accepted
+    assert summary["static"]["false_rejection_rate"] == 0.0
+    assert summary["dynamic"]["slip_rate"] == 0.0
+    assert summary["dynamic"]["false_rejection_rate"] == 0.5
+    assert summary["unusable_fixed"] == 1  # a fixed tool failing its own tests
+
+
+def test_summarize_recall_per_bug_category() -> None:
+    outcomes = [
+        _outcome(entry_id=1, bug_labels=["call.arguments.change"]),
+        _outcome(
+            entry_id=2,
+            bug_labels=["call.arguments.change"],
+            verdict_dynamic="ACCEPT",
+            category_dynamic=None,
+            pass_rate=1.0,
+        ),
+        _outcome(entry_id=3, bug_labels=["control_flow.branch.if.condition.change"]),
+    ]
+    summary = summarize(outcomes)
+    assert summary["dynamic"]["recall_by_category"] == {"call": 0.5, "control_flow": 1.0}
+    assert summary["static"]["recall_by_category"] == {"call": 0.0, "control_flow": 0.0}
+
+
+def test_summarize_empty_is_explicit() -> None:
+    with pytest.raises(ValueError, match="no outcomes"):
+        summarize([])
