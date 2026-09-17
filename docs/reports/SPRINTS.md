@@ -56,13 +56,13 @@ This keeps the sprint moving without skipping a precondition.
 | 2.3 | Generator + judge | `testgen/generator.py`, `testgen/judge.py` + tests | 2.1, 2.2 |
 | 2.4 | S3 orchestration | `stages/s3_testgen.py` + test | 2.3 |
 | 2.5 | S4 execute (+ stdin harness if 1.4 says stdin) | `stages/s4_execute.py` + test | 1.6 |
-| 2.6 | **First RQ1/RQ2 numbers:** static-only config over full dataset | `experiments/common.py`, `experiments/run_static_vs_dynamic.py` | 1.4, 1.10 |
-| 2.7 | S5 arm A (mutmut) | `mutation/arm_a_mutmut.py`, `mutation/kill.py` + tests | ⛔ **`mutmut_probe.py` passes**; see Risk R3 |
+| 2.6 | **First RQ1/RQ2 numbers:** static-only config over the Tier 1 subset (2,000 entries, seeded; DECISIONS.md) | `experiments/common.py`, `experiments/run_static_vs_dynamic.py` | 1.4, 1.10 |
+| 2.7 | S5 arm A (mutmut, inside sandbox; scripts must be wrapped in a function first) | `mutation/arm_a_mutmut.py`, `mutation/kill.py` + tests | ✅ `mutmut_probe.py` passed inside the sandbox image (2026-09-17) |
 | 2.8 | S5 arm B (LLM mutants) | `mutation/arm_b_llm.py` + test | 2.1 |
 | 2.9 | S5 dispatcher | `stages/s5_mutation.py` + test | 2.7, 2.8 |
 | 2.10 | S5b rubber-duck (first pass) | `stages/s5b_rubberduck.py` + test | 2.1 |
 
-**Exit criteria:** static-only results for the full dataset saved under
+**Exit criteria:** static-only results for the Tier 1 subset saved under
 `results/`; S4, S5 (both arms), S5b each produce a signal on a dev sample.
 **Day 5 self-check (PLAN.md):** is the dynamic config running end-to-end on the full set?
 
@@ -115,5 +115,7 @@ No new code except bug fixes to reproduce a frozen number.
 | R4 | PLAN.md assumes S0–S3 are "already built", but the fresh start (DECISIONS Day 0) means S3 (generator + judge + LLM client) must be built from scratch in Sprint 2. | Sprint 2 is the most overloaded sprint. If it slips, PLAN §8 slack order applies: drop 6.5 first, then Arm B detail. |
 | R5 | `mypy --strict toolvalidator` does not type-check `data/` or `experiments/`, so the loader (critical path) would go unchecked. | ✅ Decided 2026-09-17: gate widened to `mypy --strict toolvalidator data experiments` (DECISIONS.md). |
 | R6 | Rubber-duck tuning (3.1) and score fit (3.4) are the likeliest overruns (PLAN §8). | Day 10 buffer. |
-| R7 | Cost of full-dataset runs. **Measured:** static S1+S2 ≈ 0.5 s per real tool; one sandbox run ≈ 0.3 s. **Estimate:** 145,370 entries × 2 versions × 0.5 s ≈ 40 h static-only; dynamic with ~100 tests/program run one-by-one would be far worse. | S4 must batch all test inputs of a program into one runner call. Decide subsample size and/or parallelism before 2.6 (needs Sohaib). |
-| R8 | Sandbox image lacks numpy; 1.6% of valid entries import it and would fail even when correct. | Proposal: custom sandbox image (python:3.12-slim + numpy + mutmut). Needs Sohaib's OK (new file outside STRUCTURE.md). |
+| R7 | Cost of full-dataset runs (static ≈ 0.5 s/tool, sandbox run ≈ 0.3 s, measured). | ✅ Decided 2026-09-17: seeded subsets (Tier 1: 2,000 entries, Tier 2: 300 + 50 dev) + W parallel workers, one container per tool (DECISIONS.md). W = 3 until Docker Desktop memory is raised (then 10). S4 must still batch test cases. |
+| R8 | Sandbox image lacks numpy. | ✅ Resolved 2026-09-17: `toolvalidator-sandbox:py3.12` (numpy 1.26.4, mutmut 3.8.0, pytest 9.1.1). |
+| R9 | mutmut 3 generates **no mutants for module-level code**; ~86% of entries have no `def`. | Arm A (2.7) needs a documented script→function wrapping transform; report it as methodology. |
+| R10 | Docker Desktop has 1.9 GiB, which limits parallel sandboxes to 3. | Sohaib to raise to 8 GB (Settings → Resources). |

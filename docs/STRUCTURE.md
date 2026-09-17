@@ -45,6 +45,7 @@ toolvalidator/                     # ← repo root
 │   │
 │   ├── sandbox/                   # Docker isolation (the safety boundary)
 │   │   ├── __init__.py
+│   │   ├── Dockerfile             # sandbox image: python:3.12-slim + numpy + mutmut (pinned)
 │   │   ├── container.py           # provision/destroy, resource limits, caps
 │   │   └── exec.py                # run a script in the container, capture out/err/exit
 │   │

@@ -327,3 +327,49 @@ seen (`fracions`, `collection`, `Math`, …) are typos, i.e. real bugs.
 **Proposal (needs Sohaib's OK, since it adds a file outside STRUCTURE.md):** a small
 `sandbox/Dockerfile` building `toolvalidator-sandbox:py3.12` = python:3.12-slim + pinned numpy
 (+ mutmut for arm A). `SandboxSettings.image` already makes this a config change.
+
+## 2026-09-17 — Sandbox image `toolvalidator-sandbox:py3.12` (resolves OPEN numpy item)
+**Decision:** `toolvalidator/sandbox/Dockerfile` = `python:3.12-slim@sha256:78387bc3…84ea`
++ `numpy==1.26.4 mutmut==3.8.0 pytest==9.1.1`, `USER 65534:65534`. It is the default
+`SandboxSettings.image`. Build: `docker build -t toolvalidator-sandbox:py3.12 toolvalidator/sandbox`.
+Real-Docker tests skip, with that command in the reason, if the image is missing.
+**Why:** Approved by Sohaib. numpy is needed by 1.6% of entries. numpy 1.26.4 is the oldest release
+supporting Python 3.12, the closest to the CodeNet submission era. Checked: 0 of the 33 numpy-using
+valid fixed programs use APIs removed in 1.24 or 2.0. mutmut + pytest in the image because arm A runs
+inside the sandbox. Base pinned by digest for reproducibility.
+Verified inside a container with the sandbox flags: `uid 65534 | numpy 1.26.4 | mutmut 3.8.0 | pytest 9.1.1`.
+
+## 2026-09-17 — mutmut verified in the sandbox; module-level scripts yield no mutants
+**Finding (verified inside the locked-down container):**
+- `mutmut_probe.py` (piped via stdin, no mounts) → "ALL GOOD", exit 0.
+- A manual check confirmed a real kill: `mutmut results --all true` → `tool.x_add__mutmut_1: killed`.
+- A **module-level script produced 0 mutants** (`mutmut run` exit 1, "failed to collect stats").
+  The same logic wrapped in `def main()` listed 10 mutants. In that quick harness the run still hit a pytest
+  collection error, to be debugged in task 2.7.
+**Consequence:** ~86% of valid entries contain no `def` (1,759/2,054, by substring). Arm A therefore
+needs a documented transform that wraps a script in a function before mutation. That is a methodology
+step to report. The exact transform will be decided and tested in task 2.7.
+
+## 2026-09-17 — Experiment scale: seeded subsets + parallel sandboxes
+**Decision (initial, to be revisited with measured per-stage costs in Sprint 2):**
+- **Sampling:** deterministic, seed `20260917`, from the held-out splits (valid + test,
+  11,665 entries), at most 2 entries per `problem_id` so popular problems don't dominate.
+- **Tier 1 (cheap: S1, S2, S4 against RunBugRun tests):** 2,000 entries = 4,000 tools.
+- **Tier 2 (expensive: S3, S5 arms A/B, S5b, S7):** 300 entries = 600 tools, a subset of Tier 1.
+  There is also a **disjoint dev set of 50 entries** for prompt tuning, never reported.
+- **RQ4 fit:** 5-fold cross-validation **grouped by `problem_id`** (no problem in both train and test).
+- **Isolation:** **one fresh container per tool** (buggy and fixed are separate tools). All runs for
+  that tool share its container.
+- **Parallelism:** a process pool of W workers. `W = min(cpus − 2, docker_memory // sandbox_mem_limit)`.
+  The static stages run in the same worker processes (processes, not threads: `mypy.api` is not
+  thread-safe). LLM calls use bounded concurrency (start at 4 per model, tune after measuring SCADS limits).
+**Why:** Sohaib chose "subset + parallel". Measured costs: ~0.5 s static per tool, ~0.3 s per sandbox run,
+~8 s cold / fast warm container create. The full dataset serially would take days. A fresh container per
+tool is needed because all tools run as the same uid (nobody): one tool could leave files or processes that
+tamper with the next tool's runs in a shared container, which would contaminate results.
+Machine: 12 CPUs, 31.5 GB RAM, but Docker Desktop (Hyper-V backend) has 1.9 GiB, so **W = 3 today**.
+Raising Docker Desktop memory to 8 GB gives W = 10.
+**Estimates (not measurements):** Tier 1 static ≈ 4,000 × 0.5 s / W ≈ 11 min at W=3 (≈ 3.5 min at W=10).
+Tier 1 execution depends on S4 batching (task 2.5); measure there.
+**Alternatives rejected:** The full dataset (days of compute). Unseeded sampling (not reproducible).
+One long-lived container per worker (cross-tool contamination).

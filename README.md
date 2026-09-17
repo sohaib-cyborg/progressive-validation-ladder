@@ -13,6 +13,7 @@ Research project (TU Dresden). Evaluated on the RunBugRun dataset (Python subset
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
+docker build -t toolvalidator-sandbox:py3.12 toolvalidator/sandbox
 cp .env.example .env          # add your SCADS_API_KEY
 
 # the local gate (run before every commit)

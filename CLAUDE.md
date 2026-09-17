@@ -129,6 +129,7 @@ Run these; don't guess whether code works.
 ```bash
 # setup (once)
 pip install -e ".[dev]"
+docker build -t toolvalidator-sandbox:py3.12 toolvalidator/sandbox   # sandbox image
 
 # the full local gate — run before every commit
 ruff format . && ruff check . && mypy --strict toolvalidator data experiments && pytest -q

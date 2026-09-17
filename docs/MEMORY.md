@@ -107,7 +107,13 @@ a report. Evaluated on the **RunBugRun** dataset, Python subset only.
   newline, 1,008 end in spaces/tabs, 0 contain `
 `, 8 are empty. S4 must normalise trailing
   whitespace or it will fail correct programs.
-- **numpy:** 1.6% of valid entries import it; `python:3.12-slim` lacks it (DECISIONS.md, OPEN).
+- **Sandbox image** `toolvalidator-sandbox:py3.12` (numpy 1.26.4, mutmut 3.8.0, pytest 9.1.1) must be
+  built once: `docker build -t toolvalidator-sandbox:py3.12 toolvalidator/sandbox`.
+- **mutmut 3 does not mutate module-level code** (0 mutants on a script; 10 once wrapped in
+  `def main()`). ~86% of RunBugRun entries have no `def`, so arm A must wrap scripts first.
+- **Docker Desktop memory is 1.9 GiB** → at most 3 parallel 512m sandboxes until raised.
+- **Experiment scale:** seeded subsets (Tier 1: 2,000 entries; Tier 2: 300 + 50 dev),
+  one container per tool, W parallel workers (DECISIONS.md).
 - **Sandbox cost (measured):** ~0.3 s per `DockerSandbox.run`; static S1+S2 ~0.5 s per real
   tool. S4 must batch test cases per tool.
 - Mutation testing: **mutmut 3.8** (NOT 2.4). v3 API needs a `[mutmut]` section
@@ -144,7 +150,7 @@ Two probe scripts are in the repo root. Run them on the dev machine:
 
 Status (fill in after running):
 - [x] docker_probe.py passed on dev machine (2026-09-17, ALL CHECKS PASSED)
-- [ ] mutmut_probe.py passed on dev machine (not run yet; must also pass INSIDE the sandbox before task 2.7)
+- [x] mutmut_probe.py passed INSIDE the sandbox image (2026-09-17); verified a real kill
 - [x] RunBugRun Python count confirmed (145.4K — plenty)  ✅ done via research
 - [x] Inspected a real RunBugRun Python entry; input style = **stdin/stdout** (2026-09-17)
 
