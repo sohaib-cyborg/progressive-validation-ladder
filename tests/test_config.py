@@ -18,6 +18,7 @@ def test_defaults_with_empty_environment() -> None:
     assert s.sandbox.mem_limit == "512m"
     assert s.sandbox.pids_limit == 128
     assert s.sandbox.timeout_s > 0
+    assert s.sandbox.max_output_bytes == 1024 * 1024
     assert s.dataset_dir == Path("data/runbugrun_py")
     assert s.results_dir == Path("results")
     assert s.static.bandit_reject_severity == "HIGH"

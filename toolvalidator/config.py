@@ -41,6 +41,8 @@ class SandboxSettings(_Frozen):
     mem_limit: str = "512m"
     pids_limit: int = Field(default=128, gt=0)
     timeout_s: float = Field(default=10.0, gt=0)
+    # Per stream (stdout, stderr). Largest RunBugRun expected output is ~180 KB.
+    max_output_bytes: int = Field(default=1024 * 1024, gt=0)
 
 
 class StaticSettings(_Frozen):
