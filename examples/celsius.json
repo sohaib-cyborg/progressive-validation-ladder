@@ -1,0 +1,9 @@
+{
+  "name": "celsius_to_fahrenheit",
+  "description": "Convert a temperature from degrees Celsius to degrees Fahrenheit.",
+  "examples": [
+    {"input": 0, "output": 32},
+    {"input": 100, "output": 212},
+    {"input": -40, "output": -40}
+  ]
+}
