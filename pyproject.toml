@@ -28,12 +28,20 @@ toolvalidator = "toolvalidator.cli:main"
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
+# Only the library is installable. experiments/ and data/ are run from the repo
+# root (python -m experiments.…); without this, setuptools' flat-layout discovery
+# finds multiple top-level packages and refuses to build.
+[tool.setuptools.packages.find]
+include = ["toolvalidator*"]
+
 # ---------------------------------------------------------------------------
 # Ruff — lint + format. Run: ruff check . && ruff format .
 # ---------------------------------------------------------------------------
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# One-off pre-flight scripts, not project code (see docs/DECISIONS.md).
+extend-exclude = ["docker_probe.py", "mutmut_probe.py"]
 
 [tool.ruff.lint]
 select = [
@@ -52,7 +60,7 @@ select = [
 known-first-party = ["toolvalidator"]
 
 # ---------------------------------------------------------------------------
-# mypy — strict. Run: mypy --strict toolvalidator
+# mypy — strict. Run: mypy --strict toolvalidator data experiments
 # ---------------------------------------------------------------------------
 [tool.mypy]
 python_version = "3.12"

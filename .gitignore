@@ -15,7 +15,8 @@ htmlcov/
 
 # Data & results (large / regenerable)
 data/runbugrun_py/
-results/
+results/*
+!results/.gitkeep
 *.pkl
 
 # OS/editor
