@@ -65,3 +65,51 @@ judge zai-org/GLM-5.3 6.0s completion_tokens= 35 reasoning chars= 138 content= '
 **Finding:** SCADS latency varies a lot (the same two trivial calls took 53 s once, 8 s later).
 Tier 2 LLM cost must be measured on real prompts before fixing its size.
 **Commit:** `b441c3b llm: add SCADS client with role-pinned models and defensive JSON parsing`
+
+---
+
+### 2.5: S4 execute  (2026-09-17)
+**Status:** done
+**What was done:** Tests first (23, incl. 6 real-Docker), then `stages/s4_execute.py`.
+All tests of one tool run in a single sandbox call via a harness we write; the harness
+runs each case as a subprocess, compares output in the container and returns verdicts
+plus short previews. Categories: timeout > crash > wrong_output; `no_tests` when empty.
+**Commands run + actual output:**
+```
+$ <gate> → Success: no issues found in 21 source files / 136 passed
+  real-Docker: 50 tests in one call in 1.32s (~26 ms/test) vs ~300 ms per separate sandbox call
+```
+**Commit:** `4a831eb stages: add S4 execute (all tests in one sandbox call)`
+
+---
+
+### 2.6: RQ1/RQ2 runner + first pilot  (2026-09-17)
+**Status:** done (pilot); full Tier 1 run pending
+**What was done:** `experiments/common.py` (sampling, `evaluate_tool`, `summarize`, JSONL IO)
+and `experiments/run_static_vs_dynamic.py` (process pool, fresh container per tool).
+Downloaded `python_test0.jsonl.gz` (sha256 25ac2ed8…9c41) so the held-out pool is valid+test.
+**Pilot: 200 entries = 400 tools, seed 20260917, splits valid+test, 10 workers**
+```
+wall_clock 865.3s · 2.163 s/tool · 0 errors · sandbox toolvalidator-sandbox:py3.12
+                    slip rate (buggy accepted)   false rejection (fixed rejected)
+static only         200/200 = 1.000              0/200 = 0.000
+static + execution    1/200 = 0.005              9/200 = 0.045
+per-category recall (static): all categories 0.00 (assignment, call, control_flow,
+  expression, function, identifier, io, literal, misc, type_conversion, variable_access)
+per-category recall (dynamic): 1.00 everywhere except call 0.99
+dynamic failure categories, buggy: wrong_output 133, crash 63, timeout 3
+dynamic failure categories, fixed: wrong_output 5, timeout 4
+median tests per tool: 102
+```
+**Findings (why the 9 false rejections happened):**
+- 3 float formatting: expected `12.5663706144`, Python prints `12.566370614359172` (p02705 ×2, p03135).
+- 4 timeouts: slow-but-correct programs against a 5 s per-test limit under 10 parallel workers.
+- 2 output-spacing quirks (p02409, p00101), not yet explained.
+- The single buggy tool that slipped (entry 451069) passes all 103 of its own tests:
+  dataset label noise, not a validator failure.
+**Fix + rerun:** float-tolerant token comparison (`math.isclose`, rel/abs 1e-6) and a 10 s
+per-test timeout, both `ExecutionSettings`. Rerun of the same 200 entries in progress.
+**Commits:** `8b3b520` + `25fdae4` (plumbing; 8b3b520 was committed against a failing gate by
+mistake, fixed in 25fdae4), `0c7916d` (runner), `8861507` (float tolerance + 10 s timeout)
+**Caveat:** these are pilot numbers on 200 of 11,665 held-out entries, and the execution arm
+uses the dataset's own tests (the best case). Generated-test arms come in RQ3.
