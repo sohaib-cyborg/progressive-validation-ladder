@@ -49,6 +49,14 @@ class SandboxSettings(_Frozen):
     max_output_bytes: int = Field(default=1024 * 1024, gt=0)
 
 
+class ExecutionSettings(_Frozen):
+    # S4. 10s per test: 4 of 9 pilot false rejections were slow-but-correct programs.
+    # Float tolerance: expected outputs are rounded while Python prints full precision.
+    test_timeout_s: float = Field(default=10.0, gt=0)
+    float_rel_tol: float = Field(default=1e-6, gt=0)
+    float_abs_tol: float = Field(default=1e-6, ge=0)
+
+
 class StaticSettings(_Frozen):
     # S2 hard-rejects at or above this bandit severity. All findings are recorded
     # regardless, so experiments can re-threshold offline (DECISIONS.md).
@@ -59,6 +67,7 @@ class Settings(_Frozen):
     llm: LLMSettings = Field(default_factory=LLMSettings)
     sandbox: SandboxSettings = Field(default_factory=SandboxSettings)
     static: StaticSettings = Field(default_factory=StaticSettings)
+    execution: ExecutionSettings = Field(default_factory=ExecutionSettings)
     dataset_dir: Path = Path("data/runbugrun_py")
     results_dir: Path = Path("results")
 

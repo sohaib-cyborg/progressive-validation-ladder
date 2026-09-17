@@ -79,7 +79,14 @@ def evaluate_tool(
     artifact = ToolArtifact(tool_id=f"{entry.entry_id}-{variant}", code=code)
     static = static_stages(settings)
     static_record = run_pipeline(artifact, entry.request, static, NoExecutionSandbox())
-    dynamic_stages: list[Stage] = [*static, partial(s4_execute.run, tests=entry.tests)]
+    execute = partial(
+        s4_execute.run,
+        tests=entry.tests,
+        timeout_s=settings.execution.test_timeout_s,
+        rel_tol=settings.execution.float_rel_tol,
+        abs_tol=settings.execution.float_abs_tol,
+    )
+    dynamic_stages: list[Stage] = [*static, execute]
     dynamic_record = run_pipeline(artifact, entry.request, dynamic_stages, sandbox)
     execute_result = next((r for r in dynamic_record.results if r.stage == s4_execute.STAGE), None)
     pass_rate = None if execute_result is None else execute_result.data.get("pass_rate")

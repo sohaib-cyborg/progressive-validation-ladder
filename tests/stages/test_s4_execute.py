@@ -19,7 +19,7 @@ from toolvalidator.contracts import (
 from toolvalidator.sandbox.container import provision
 from toolvalidator.sandbox.exec import DockerSandbox
 from toolvalidator.stages import s4_execute
-from toolvalidator.stages.s4_execute import HarnessError, normalize_output
+from toolvalidator.stages.s4_execute import HarnessError, normalize_output, outputs_match
 
 _REQUEST = CapabilityRequest(name="add_one", description="Read n, print n+1.")
 TESTS = [IOExample(input="1", output="2"), IOExample(input="5", output="6")]
@@ -206,3 +206,56 @@ def test_real_many_tests_in_one_sandbox_call(sandbox: DockerSandbox) -> None:
     res = _run(ADD_ONE, many, sandbox)
     assert res.passed
     assert res.data["total"] == 50
+
+
+# --- float-tolerant comparison ---------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("actual", "expected"),
+    [
+        ("12.566370614359172", "12.5663706144"),  # real case: p02705, 2*pi*r
+        ("8.5", "8.50"),
+        ("0.1 0.2", "0.100000001 0.199999999"),
+        ("ans 1.0000001", "ans 1.0"),
+        ("1e-9", "0.0"),
+        ("3", "3"),
+    ],
+)
+def test_outputs_match_tolerates_float_formatting(actual: str, expected: str) -> None:
+    assert outputs_match(actual, expected, rel_tol=1e-6, abs_tol=1e-6)
+
+
+@pytest.mark.parametrize(
+    ("actual", "expected"),
+    [
+        ("12.6", "12.5663706144"),
+        ("1.1", "1.0"),
+        ("1 2", "1 2 3"),
+        ("a", "b"),
+        ("1\n2", "1"),
+        ("nan", "1.0"),
+    ],
+)
+def test_outputs_match_rejects_real_differences(actual: str, expected: str) -> None:
+    assert not outputs_match(actual, expected, rel_tol=1e-6, abs_tol=1e-6)
+
+
+def test_payload_carries_tolerances(record: ValidationRecord) -> None:
+    sandbox = _sandbox_returning([_result(0), _result(1)])
+    s4_execute.run(_tool(), record, sandbox, tests=TESTS, rel_tol=1e-3, abs_tol=1e-4)
+    payload = json.loads(sandbox.calls[0][1])
+    assert (payload["rel_tol"], payload["abs_tol"]) == (1e-3, 1e-4)
+
+
+@pytest.mark.slow
+def test_real_float_output_passes_with_tolerance(sandbox: DockerSandbox) -> None:
+    # p02705-style: expected is rounded, Python prints full precision.
+    tests = [IOExample(input="2", output="12.5663706144")]
+    assert _run("import math; print(2 * math.pi * int(input()))", tests, sandbox).passed
+
+
+@pytest.mark.slow
+def test_real_float_beyond_tolerance_still_fails(sandbox: DockerSandbox) -> None:
+    tests = [IOExample(input="2", output="12.5663706144")]
+    assert not _run("print(12.6)", tests, sandbox).passed

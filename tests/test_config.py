@@ -22,6 +22,9 @@ def test_defaults_with_empty_environment() -> None:
     assert s.dataset_dir == Path("data/runbugrun_py")
     assert s.results_dir == Path("results")
     assert s.static.bandit_reject_severity == "HIGH"
+    assert s.execution.test_timeout_s == 10.0
+    assert s.execution.float_rel_tol == 1e-6
+    assert s.execution.float_abs_tol == 1e-6
 
 
 def test_bandit_reject_severity_is_configurable() -> None:

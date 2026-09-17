@@ -9,7 +9,9 @@ trailing newline (docs/MEMORY.md), so an exact match would fail correct programs
 # TODO(scope): no float tolerance yet; problems with float answers may be judged wrong.
 """
 
+import inspect
 import json
+import math
 from collections.abc import Sequence
 
 from pydantic import BaseModel, ConfigDict, JsonValue, ValidationError
@@ -17,7 +19,11 @@ from pydantic import BaseModel, ConfigDict, JsonValue, ValidationError
 from toolvalidator.contracts import IOExample, Sandbox, StageResult, ToolArtifact, ValidationRecord
 
 STAGE = "s4_execute"
-DEFAULT_TEST_TIMEOUT_S = 5.0
+# 10s, not 5s: 4 of 9 pilot false rejections were slow-but-correct programs
+# (docs/reports/sprint-02.md).
+DEFAULT_TEST_TIMEOUT_S = 10.0
+DEFAULT_REL_TOL = 1e-6
+DEFAULT_ABS_TOL = 1e-6
 HARNESS_OVERHEAD_S = 10.0
 MAX_TEST_OUTPUT_BYTES = 1024 * 1024
 PREVIEW_CHARS = 200
@@ -31,6 +37,39 @@ class HarnessError(RuntimeError):
 def normalize_output(text: str) -> str:
     """Trailing whitespace is not significant; everything else is."""
     return "\n".join(line.rstrip() for line in text.rstrip().splitlines())
+
+
+def outputs_match(actual: str, expected: str, *, rel_tol: float, abs_tol: float) -> bool:
+    """Equal after normalisation, or equal token by token with float tolerance.
+
+    Competitive-programming expected outputs are rounded (``12.5663706144``) while
+    Python prints full precision (``12.566370614359172``). Comparing text alone
+    rejects correct programs, which measured 3 of 9 false rejections in the pilot.
+    """
+    actual, expected = normalize_output(actual), normalize_output(expected)
+    if actual == expected:
+        return True
+    actual_lines, expected_lines = actual.splitlines(), expected.splitlines()
+    if len(actual_lines) != len(expected_lines):
+        return False
+    for actual_line, expected_line in zip(actual_lines, expected_lines, strict=True):
+        actual_tokens, expected_tokens = actual_line.split(), expected_line.split()
+        if len(actual_tokens) != len(expected_tokens):
+            return False
+        for got, want in zip(actual_tokens, expected_tokens, strict=True):
+            if got != want and not _close(got, want, rel_tol, abs_tol):
+                return False
+    return True
+
+
+def _close(got: str, want: str, rel_tol: float, abs_tol: float) -> bool:
+    try:
+        got_value, want_value = float(got), float(want)
+    except ValueError:
+        return False
+    if math.isnan(got_value) or math.isnan(want_value):
+        return False  # NaN never equals a real expected answer
+    return math.isclose(got_value, want_value, rel_tol=rel_tol, abs_tol=abs_tol)
 
 
 class _TestOutcome(BaseModel):
@@ -48,14 +87,7 @@ class _HarnessReport(BaseModel):
     results: list[_TestOutcome]
 
 
-_HARNESS = """
-import json, resource, subprocess, sys
-
-
-def normalize_output(text):
-    return "\\n".join(line.rstrip() for line in text.rstrip().splitlines())
-
-
+_HARNESS_MAIN = """
 payload = json.load(sys.stdin)
 cap = payload["max_output_bytes"]
 preview = payload["preview_chars"]
@@ -87,7 +119,9 @@ for index, case in enumerate(payload["tests"]):
         stderr = handle.read(cap).decode("utf-8", "replace")
     returned = proc.returncode
     code = returned if returned is None or returned >= 0 else 128 - returned
-    matches = normalize_output(actual) == normalize_output(case["output"])
+    matches = outputs_match(
+        actual, case["output"], rel_tol=payload["rel_tol"], abs_tol=payload["abs_tol"]
+    )
     passed = not timed_out and code == 0 and matches
     results.append({
         "index": index, "passed": passed, "timed_out": timed_out, "exit_code": code,
@@ -95,6 +129,17 @@ for index, case in enumerate(payload["tests"]):
     })
 print(json.dumps({"results": results}))
 """
+
+# The harness compares outputs with the very functions tested on the host.
+_HARNESS = "\n".join(
+    [
+        "import json, math, resource, subprocess, sys",
+        inspect.getsource(normalize_output),
+        inspect.getsource(outputs_match),
+        inspect.getsource(_close),
+        _HARNESS_MAIN,
+    ]
+)
 
 
 def run(
@@ -104,6 +149,8 @@ def run(
     *,
     tests: Sequence[IOExample],
     timeout_s: float | None = None,
+    rel_tol: float = DEFAULT_REL_TOL,
+    abs_tol: float = DEFAULT_ABS_TOL,
 ) -> StageResult:
     if not tests:
         return record.add(
@@ -115,6 +162,8 @@ def run(
             "code": artifact.code,
             "tests": [{"input": _as_text(t.input), "output": _as_text(t.output)} for t in tests],
             "timeout_s": per_test,
+            "rel_tol": rel_tol,
+            "abs_tol": abs_tol,
             "max_output_bytes": MAX_TEST_OUTPUT_BYTES,
             "preview_chars": PREVIEW_CHARS,
         }
