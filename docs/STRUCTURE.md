@@ -17,7 +17,11 @@ toolvalidator/                     # ← repo root
 │   ├── MEMORY.md                  # durable context + session log (READ FIRST)
 │   ├── PLAN.md                    # the research plan + 2-week schedule
 │   ├── STRUCTURE.md               # this file
-│   └── DECISIONS.md               # append-only log of design decisions + why
+│   ├── DECISIONS.md               # append-only log of design decisions + why
+│   └── reports/                   # progress reports: what was done, commands, real output
+│       ├── README.md              # index + entry format
+│       ├── SPRINTS.md             # sprint plan (5 sprints over the 14 days) + risks
+│       └── sprint-NN.md           # one work log per sprint
 │
 ├── toolvalidator/                 # ← the package (the pipeline itself)
 │   │
@@ -91,7 +95,7 @@ toolvalidator/                     # ← repo root
 │   └── broken_celsius.py          # a wrong one (for testing the reject path)
 │
 └── tests/                         # pytest — MIRRORS the package structure
-    ├── __init__.py
+    ├── __init__.py                # (each tests/<subpkg>/ also has an empty __init__.py)
     ├── conftest.py                # fixtures: fake sandbox, sample records, tmp containers
     ├── test_contracts.py
     ├── test_pipeline.py
