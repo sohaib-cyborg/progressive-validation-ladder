@@ -63,17 +63,23 @@ a report. Evaluated on the **RunBugRun** dataset, Python subset only.
 ## Environment / access
 
 - **SCADS LLM:** endpoint `https://llm.scads.ai/v1` (OpenAI-compatible), key in
-  env `SCADS_API_KEY` (see `.env.example`). Models available: Qwen3-Coder-30B,
-  Llama-3.3-70B, gpt-oss-120b, etc.
+  env `SCADS_API_KEY` (see `.env.example`). Models listed on 2026-09-17 (`GET /models`,
+  23 entries) include Qwen/Qwen3.8-27B, zai-org/GLM-5.3(-Flash), openai/gpt-oss-120b,
+  deepseek-ai/DeepSeek-V4.1-Flash, meta-llama/Llama-3.3-70B-Instruct,
+  google/gemma-4-26B-A4B-it, MiniMaxAI/MiniMax-M3 (HTTP 500 that day), plus `alias-*`
+  names. Qwen3-Coder is no longer listed.
 - **Compute:** GPU + SCADS access confirmed working on Sohaib's machine.
 - **Docker** required and available on the dev machine.
 
 ## Model roles (pinned for reproducibility)
 
-- **Generator:** a code-specialized model (Qwen3-Coder class). Sees code as
-  interface reference; treats the description as truth.
-- **Judge:** an independent model from a *different family* (e.g. Llama-70B).
-  Blind to the tool code. Decides if a generated test is valid.
+- **Generator:** `Qwen/Qwen3.8-27B` (pinned 2026-09-17; Qwen3-Coder is no longer
+  served by SCADS). Sees code as interface reference; treats the description as truth.
+- **Judge:** `zai-org/GLM-5.3` (pinned 2026-09-17). A *different family*, and larger
+  with stronger reasoning than the generator (Sohaib's requirement). Blind to the tool
+  code. Decides if a generated test is valid. See DECISIONS.md.
+- Set via `SCADS_GENERATOR_MODEL` / `SCADS_JUDGE_MODEL` in `.env`. Never use
+  `alias-*` model names (they hide the underlying model, so results aren't reproducible).
 - (Choice of exact models is pinned, not optimized — "best model" is out of scope
   beyond the optional judge-independence check.)
 
@@ -84,9 +90,19 @@ a report. Evaluated on the **RunBugRun** dataset, Python subset only.
   filtering. Ships fine-grained bug-type labels (control flow / expressions /
   literals / function calls) → use these for per-category recall (no BugsInPy
   needed). Test cases are deterministic.
-- RunBugRun entries are competitive-programming style → likely **stdin/stdout**,
-  not function-call. The S4 harness must feed stdin and read stdout. Confirm the
-  exact format when writing `data/loaders/runbugrun.py`.
+- **RunBugRun format (inspected 2026-09-17):** entries are **stdin/stdout scripts**
+  (2,032/2,054 of python_valid0 read input; only 295 contain a `def`; median 10 LOC).
+  Bug files: `python_{train0-2,valid0,test0}.jsonl.gz` = 145,370 entries with fields
+  `id, buggy_submission_id, fixed_submission_id, problem_id, user_id, buggy_code,
+  fixed_code, labels (list|null), change_count, line_hunks, errors (often absent)`.
+  Tests: `tests_all.jsonl.gz` = 321,418 rows `{id, problem_id, input, output}` (stdin →
+  expected stdout), linked by `problem_id` (median ~103 tests/problem in valid).
+- **RunBugRun has NO problem descriptions in its release files.** Use CodeNet's
+  `doc/problem_descriptions.tar.gz` (IBM/Project_CodeNet on GitHub): HTML per
+  problem, covering 3,924/3,926 problems with tests. Two markups: AtCoder
+  (`<h3>Sample Input N</h3><pre>`, bilingual with a `lang-en` span) and AOJ
+  (`<H2>Sample Input N</H2>` + `<H2>Output for the Sample Input N</H2>`).
+- Raw downloads live in `data/runbugrun_py/raw/` (git-ignored); sha256 in sprint-01.md.
 - Mutation testing: **mutmut 3.8** (NOT 2.4). v3 API needs a `[mutmut]` section
   with `source_paths=` (the old `--paths-to-mutate` CLI flag is gone;
   `paths_to_mutate` is deprecated). No clean Python API → drive it as a
@@ -119,10 +135,10 @@ Two probe scripts are in the repo root. Run them on the dev machine:
 - `python mutmut_probe.py` — confirms mutmut 3.8 runs on a single function.
 
 Status (fill in after running):
-- [ ] docker_probe.py passed on dev machine
+- [x] docker_probe.py passed on dev machine (2026-09-17, ALL CHECKS PASSED)
 - [ ] mutmut_probe.py passed on dev machine
 - [x] RunBugRun Python count confirmed (145.4K — plenty)  ✅ done via research
-- [ ] Inspected a real RunBugRun Python entry; input style = ______ (stdin / func-call)
+- [x] Inspected a real RunBugRun Python entry; input style = **stdin/stdout** (2026-09-17)
 
 ## Session log (append one entry per session — newest at bottom)
 

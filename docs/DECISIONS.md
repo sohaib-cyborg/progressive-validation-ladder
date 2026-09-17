@@ -229,3 +229,44 @@ convention), 3 NEEDS_REVIEW. `examples/broken_celsius.py` has a **logic bug**
 **Why:** A logic bug is the useful broken example for S4 and later stages, and it
 illustrates the RQ2 gap. The reject path is tested with a temporary syntax-error file.
 The Sprint 1 exit criterion in SPRINTS.md was corrected accordingly.
+
+## 2026-09-17 — LLM models: generator Qwen3.8-27B, judge GLM-5.3
+**Decision:** `SCADS_GENERATOR_MODEL=Qwen/Qwen3.8-27B`, `SCADS_JUDGE_MODEL=zai-org/GLM-5.3`.
+**Why:** Sohaib's requirement: generator and reviewer differ, and the reviewer is a
+bigger model with stronger reasoning. `GET /models` on SCADS (2026-09-17) no longer lists
+Qwen3-Coder. A one-token call to each candidate confirmed availability and a reasoning trace.
+Sizes are from public sources (vLLM recipes, Hugging Face, vendor posts), not verified by us:
+Qwen3.8-27B ≈ 27.8B dense, strong coding benchmarks. GLM-5.3 ≈ 743B MoE / ~39B active,
+reasoning model with adjustable effort. So the judge is from a different family (GLM vs.
+Qwen) and larger in both total and active parameters.
+**Alternatives rejected:**
+- `openai/gpt-oss-120b`: 117B total but only ~5B active, so "bigger" is debatable.
+- `deepseek-ai/DeepSeek-V4.1-Flash`: speed-tuned, ~8–16B active.
+- `meta-llama/Llama-3.3-70B-Instruct`: no reasoning trace. It was the old example in MEMORY.md.
+- `zai-org/GLM-5.3-Flash`: smaller than GLM-5.3.
+- `alias-*`: responses report the alias, not the model, so they can't be reproduced.
+- `MiniMaxAI/MiniMax-M3`: HTTP 500 at probe time.
+**Risk:** GLM-5.3 is the slowest candidate (1.9 s for a one-token reply). Judge cost per test
+must be measured in Sprint 2. If it's too slow, GLM-5.3-Flash keeps the family but is smaller;
+that would need Sohaib's OK.
+
+## 2026-09-17 — Capability Request descriptions come from CodeNet
+**Decision:** The RunBugRun loader builds `CapabilityRequest.description` from IBM Project
+CodeNet's `doc/problem_descriptions.tar.gz` (the English part), and `examples` from the
+"Sample Input/Output" pairs in that HTML. RunBugRun's `tests_all` rows are the held-out
+ground-truth tests. Name = `problem_id`.
+**Why:** Inspection showed RunBugRun's release files contain no problem statement. PLAN.md
+§7 assumed one existed. RunBugRun's own README says its problems come from CodeNet.
+Coverage: 670/671 problems in `python_valid0`, 3,924/3,926 problems with tests. Using the statement's
+own samples as "example I/O" matches the Capability Request contract (a task plus examples)
+and keeps the ground-truth tests separate from what the generator sees.
+**Alternatives rejected:** Drawing examples from `tests_all` (would leak ground truth into
+the request). Proceeding without descriptions (would make RQ3, S5b, and RQ5 impossible).
+**Open:** Entries whose problem has no description (≈0.05%) are skipped and counted. Check
+CodeNet's terms of use before redistributing anything.
+
+## 2026-09-17 — Commit + tag at every sprint completion
+**Decision:** When a sprint's exit criteria are met, make one `sprint: complete Sprint N`
+commit (SPRINTS.md status + log summary) and tag it `sprint-N`.
+**Why:** Sohaib asked for commits at every sprint completion. Tags make each sprint's
+state reproducible with `git checkout sprint-N`.

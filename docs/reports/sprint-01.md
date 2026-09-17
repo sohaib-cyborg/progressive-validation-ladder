@@ -252,3 +252,59 @@ exit=0      ← expected: static-only checks cannot see the logic bug (RQ2)
 per tool on small scratch files. Estimate, not a measurement: 145,400 tools × ~0.35 s ≈
 14 h serial for the static-only run alone (task 2.6). Needs a subsampling or
 parallelism decision before 2.6 (added as R7 in SPRINTS.md).
+
+---
+
+### Pre-flight: Docker probe, SCADS models, RunBugRun inspection  (2026-09-17)
+**Status:** done
+**What was done:**
+- Sohaib started Docker Desktop and ran `docker_probe.py`. The pasted output stopped
+  before the final banner, so I re-ran it to confirm.
+- Listed SCADS models, sent a one-token call to 12 candidates, looked up public
+  model sizes, and chose generator/judge (DECISIONS.md). Appended both IDs to `.env`
+  without reading the file (key never printed).
+- Downloaded and inspected RunBugRun release files + CodeNet problem descriptions into
+  `data/runbugrun_py/raw/` (git-ignored).
+**Commands run + actual output:**
+```
+$ python docker_probe.py
+[ok] Docker daemon reachable ... [ok] Network correctly blocked (inside process failed, exit=1)
+[ok] Runaway container killed on timeout
+ ALL CHECKS PASSED — sandbox config works on this machine.
+probe exit=0
+
+$ GET https://llm.scads.ai/v1/models   → count: 23
+$ one-token chat call per model (served_as | latency | reasoning trace):
+alias-code            -> alias-code  0.4s  trace=True     (alias: underlying model hidden)
+alias-huge            -> HTTP 503 temporarily unavailable
+Qwen/Qwen3.8-27B      -> 0.4s trace=True
+openai/gpt-oss-120b   -> 1.4s trace=True
+zai-org/GLM-5.3       -> 1.9s trace=True
+zai-org/GLM-5.3-Flash -> 0.4s trace=True
+deepseek-ai/DeepSeek-V4.1-Flash -> 0.4s trace=True
+MiniMaxAI/MiniMax-M3  -> HTTP 500 InternalServerError
+meta-llama/Llama-3.3-70B-Instruct -> 1.8s trace=False
+google/gemma-4-26B-A4B-it -> 1.4s trace=False
+$ load_settings() → api_key set: True | generator: Qwen/Qwen3.8-27B | judge: zai-org/GLM-5.3
+
+$ downloads (github.com/giganticode/run_bug_run_data release v0.0.1; IBM/Project_CodeNet)
+sha256 16e69d44…8d75  python_valid0.jsonl.gz   264,305 B
+sha256 2fab824c…0d96  tests_all.jsonl.gz    20,539,859 B
+sha256 c91c3026…1d34  Manifest.json.gz           1,341 B
+problem_descriptions.tar.gz  3,492,211 B (3,999 HTML files)
+Manifest python sizes: test0 9,611 · train0 50,000 · train1 50,000 · train2 33,705 · valid0 2,054 = 145,370
+python_valid0: 2,054 rows · 671 problems · keys id, buggy_submission_id, fixed_submission_id,
+  problem_id, user_id, buggy_code, fixed_code, labels, change_count, line_hunks, errors
+  errors present: 481/2054 · labels None: 64 · uses input()/stdin: 2032/2054 · contains def: 295
+  buggy LOC min/median/p90/max: 1 / 10 / 27 / 277
+  label prefixes: call 1279, expression 841, control_flow 739, literal 535, assignment 451,
+  identifier 408, io 326, misc 87, variable_access 76, function 16, type_conversion 2
+tests_all: 321,418 rows {id, problem_id, input, output} · 3,926 problems ·
+  valid problems with tests 671/671 · tests per valid problem min 1 / median 103 / max 132
+descriptions: valid problems covered 670/671 · problems-with-tests covered 3,924/3,926
+  markup: lang-en span 625 · <h3>Sample Input 624 · <H2>Sample Input 43 · no Sample Input 3
+```
+**Decisions:** DECISIONS.md "LLM models", "Capability Request descriptions come from CodeNet",
+"Commit + tag at every sprint completion".
+**Open issues / next:** `mutmut_probe.py` has not been run yet (needed before 2.7, inside the
+sandbox). Next: 1.4 loader, 1.5 container, 1.6 exec, then the Sprint 1 completion commit + tag.
