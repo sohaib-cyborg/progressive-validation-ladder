@@ -4,9 +4,12 @@ All tests for one tool run in a single sandbox call: a harness script (our code)
 runs each case as a subprocess, compares the output there, and reports only
 verdicts and short previews, so output stays small no matter how many tests there are.
 
-Comparison ignores trailing whitespace: 5.3% of RunBugRun expected outputs have no
-trailing newline (docs/MEMORY.md), so an exact match would fail correct programs.
-# TODO(scope): no float tolerance yet; problems with float answers may be judged wrong.
+Comparison ignores trailing whitespace (5.3% of RunBugRun expected outputs have no
+trailing newline) and compares numbers with a tolerance, because expected outputs are
+rounded while Python prints full precision. Both were measured causes of wrongly
+rejecting correct programs (docs/reports/sprint-02.md).
+
+Tests come from the caller, or from what S3 accepted when none are given.
 """
 
 import inspect
@@ -63,6 +66,11 @@ def outputs_match(actual: str, expected: str, *, rel_tol: float, abs_tol: float)
 
 
 def _close(got: str, want: str, rel_tol: float, abs_tol: float) -> bool:
+    # Only when the EXPECTED answer is fractional. If the task expects 1326, then
+    # 1326.0 is wrong: that is exactly the int/float bug class RunBugRun labels
+    # type_conversion, and tolerating it hid 4 real bugs in the pilot.
+    if not any(char in want for char in ".eE"):
+        return False
     try:
         got_value, want_value = float(got), float(want)
     except ValueError:
@@ -147,12 +155,13 @@ def run(
     record: ValidationRecord,
     sandbox: Sandbox,
     *,
-    tests: Sequence[IOExample],
+    tests: Sequence[IOExample] | None = None,
     timeout_s: float | None = None,
     rel_tol: float = DEFAULT_REL_TOL,
     abs_tol: float = DEFAULT_ABS_TOL,
 ) -> StageResult:
-    if not tests:
+    cases = list(tests) if tests is not None else tests_from_record(record)
+    if not cases:
         return record.add(
             StageResult(stage=STAGE, passed=False, category="no_tests", detail="no tests to run")
         )
@@ -160,7 +169,7 @@ def run(
     payload = json.dumps(
         {
             "code": artifact.code,
-            "tests": [{"input": _as_text(t.input), "output": _as_text(t.output)} for t in tests],
+            "tests": [{"input": _as_text(t.input), "output": _as_text(t.output)} for t in cases],
             "timeout_s": per_test,
             "rel_tol": rel_tol,
             "abs_tol": abs_tol,
@@ -168,7 +177,7 @@ def run(
             "preview_chars": PREVIEW_CHARS,
         }
     )
-    overall = per_test * len(tests) + HARNESS_OVERHEAD_S
+    overall = per_test * len(cases) + HARNESS_OVERHEAD_S
     exec_result = sandbox.run(_HARNESS, stdin=payload, timeout_s=overall)
     if exec_result.timed_out:
         detail = f"harness exceeded the overall timeout of {overall:.0f}s"
@@ -179,7 +188,22 @@ def run(
         report = _HarnessReport.model_validate_json(exec_result.stdout)
     except ValidationError as exc:
         raise HarnessError(f"unreadable harness output: {exec_result.stdout[:200]!r}") from exc
-    return record.add(_stage_result(report, len(tests), exec_result.duration_s))
+    return record.add(_stage_result(report, len(cases), exec_result.duration_s))
+
+
+def tests_from_record(record: ValidationRecord) -> list[IOExample]:
+    """The tests S3 accepted, if S3 ran. Empty when there are none."""
+    stage_result = next((r for r in reversed(record.results) if r.stage == "s3_testgen"), None)
+    if stage_result is None:
+        return []
+    cases = stage_result.data.get("tests")
+    if not isinstance(cases, list):
+        return []
+    return [
+        IOExample(input=case["input"], output=case["output"])
+        for case in cases
+        if isinstance(case, dict) and "input" in case and "output" in case
+    ]
 
 
 def _stage_result(report: _HarnessReport, total: int, duration_s: float) -> StageResult:

@@ -220,10 +220,21 @@ def test_real_many_tests_in_one_sandbox_call(sandbox: DockerSandbox) -> None:
         ("ans 1.0000001", "ans 1.0"),
         ("1e-9", "0.0"),
         ("3", "3"),
+        ("8", "8.0"),
     ],
 )
 def test_outputs_match_tolerates_float_formatting(actual: str, expected: str) -> None:
     assert outputs_match(actual, expected, rel_tol=1e-6, abs_tol=1e-6)
+
+
+@pytest.mark.parametrize(
+    ("actual", "expected"),
+    [("1326.0", "1326"), ("2.0 3.0", "2 3"), ("0.0", "0"), ("1e3", "1000")],
+)
+def test_integer_answers_are_compared_exactly(actual: str, expected: str) -> None:
+    # Real case: entry 432249 prints 1326.0 (float division) where 1326 is expected.
+    # Tolerating that hides the int/float bug class (RunBugRun: type_conversion).
+    assert not outputs_match(actual, expected, rel_tol=1e-6, abs_tol=1e-6)
 
 
 @pytest.mark.parametrize(
@@ -259,3 +270,39 @@ def test_real_float_output_passes_with_tolerance(sandbox: DockerSandbox) -> None
 def test_real_float_beyond_tolerance_still_fails(sandbox: DockerSandbox) -> None:
     tests = [IOExample(input="2", output="12.5663706144")]
     assert not _run("print(12.6)", tests, sandbox).passed
+
+
+# --- tests supplied by S3 --------------------------------------------------------
+
+
+def _record_with_s3_tests(cases: list[dict[str, str]]) -> ValidationRecord:
+    rec = ValidationRecord(request=_REQUEST)
+    rec.add(StageResult(stage="s3_testgen", passed=True, data={"tests": cases}))
+    return rec
+
+
+def test_tests_default_to_the_ones_s3_accepted() -> None:
+    rec = _record_with_s3_tests([{"input": "1", "output": "2"}])
+    sandbox = _sandbox_returning([_result(0)])
+    res = s4_execute.run(_tool(), rec, sandbox)
+    assert res.passed
+    assert json.loads(sandbox.calls[0][1])["tests"] == [{"input": "1", "output": "2"}]
+
+
+def test_explicit_tests_win_over_the_record() -> None:
+    rec = _record_with_s3_tests([{"input": "9", "output": "9"}])
+    sandbox = _sandbox_returning([_result(0), _result(1)])
+    s4_execute.run(_tool(), rec, sandbox, tests=TESTS)
+    assert json.loads(sandbox.calls[0][1])["tests"][0]["input"] == "1"
+
+
+def test_no_s3_result_and_no_tests_is_no_tests(record: ValidationRecord) -> None:
+    sandbox = _sandbox_returning([])
+    assert s4_execute.run(_tool(), record, sandbox).category == "no_tests"
+
+
+def test_malformed_s3_test_entries_are_ignored() -> None:
+    rec = ValidationRecord(request=_REQUEST)
+    rec.add(StageResult(stage="s3_testgen", passed=True, data={"tests": "not a list"}))
+    sandbox = _sandbox_returning([])
+    assert s4_execute.run(_tool(), rec, sandbox).category == "no_tests"
