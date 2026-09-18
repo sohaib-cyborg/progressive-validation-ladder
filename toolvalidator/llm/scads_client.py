@@ -54,7 +54,7 @@ class ScadsClient:
         )
 
     def complete(self, role: Role, *, system: str, user: str) -> LLMResult:
-        model = self._model_for(role)
+        model = self.model_for(role)
         messages: list[ChatCompletionMessageParam] = [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
@@ -81,7 +81,8 @@ class ScadsClient:
             latency_s=latency,
         )
 
-    def _model_for(self, role: Role) -> str:
+    def model_for(self, role: Role) -> str:
+        """The pinned model id for a role. Public so tracing can record what we asked for."""
         model = (
             self._settings.generator_model if role == "generator" else self._settings.judge_model
         )
