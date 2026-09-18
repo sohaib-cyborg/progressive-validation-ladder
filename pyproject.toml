@@ -12,6 +12,7 @@ dependencies = [
     "mutmut>=3.8",         # S5 mutation arm A (v3 API: needs source_paths in config, subprocess-driven)
     "scikit-learn>=1.4",    # S6 logistic regression + calibration
     "numpy>=1.26",
+    "langgraph>=1.2,<2",    # agents/: bounded multi-step LLM graphs (imported ONLY there)
 ]
 
 [project.optional-dependencies]
