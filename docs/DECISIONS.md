@@ -373,3 +373,23 @@ Raising Docker Desktop memory to 8 GB gives W = 10.
 Tier 1 execution depends on S4 batching (task 2.5); measure there.
 **Alternatives rejected:** The full dataset (days of compute). Unseeded sampling (not reproducible).
 One long-lived container per worker (cross-tool contamination).
+
+## 2026-09-17 — Output comparison: whitespace-insensitive, tolerance only for fractional answers
+**Decision:** S4 judges a test passed when the program exits 0, does not time out, and its
+output matches after (a) ignoring trailing whitespace and (b) comparing token by token,
+where numbers are compared with `math.isclose` (rel/abs 1e-6) **only if the expected token
+is fractional**. Integer expected answers must match exactly. Per-test timeout: 10 s.
+**Why (measured on the same 200-entry sample, three runs):**
+| rule | slip rate | false rejections |
+|---|---|---|
+| exact text, 5 s timeout | 1/200 | 9/200 |
+| tolerance everywhere, 10 s | 5/200 | 4/200 |
+| tolerance only for fractional answers, 10 s | 1/200 | 4/200 |
+Exact text rejects correct programs over float formatting (`12.566370614359172` vs
+`12.5663706144`). Tolerating every number instead accepts programs that print `1326.0`
+where `1326` is expected — the `type_conversion` bug class, whose recall fell to 0.50.
+The final rule keeps both gains.
+**Alternatives rejected:** exact matching (false rejections); blanket tolerance (hides a
+real bug class); per-problem judge configuration (RunBugRun ships none).
+**Open:** 3 correct programs are still too slow at 10 s per test; raising the limit further
+costs runtime. Reported as a limitation unless the full run shows it matters more.

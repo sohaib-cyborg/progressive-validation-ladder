@@ -155,15 +155,27 @@ come later.
 | Configuration | Buggy tools accepted (slip rate) | Correct tools rejected |
 |---|---|---|
 | **Static only** (parse + bandit + mypy) | **200/200 = 100%** | 0/200 = 0% |
-| **Static + execution** (run 1) | 1/200 = 0.5% | 9/200 = 4.5% |
-| **Static + execution** (run 2, after fixes) | 5/200 = 2.5% | 4/200 = 2.0% |
+| **Static + execution**, run 1: exact text comparison, 5 s per-test timeout | 1/200 = 0.5% | 9/200 = 4.5% |
+| **Static + execution**, run 2: numeric tolerance everywhere, 10 s timeout | 5/200 = 2.5% | 4/200 = 2.0% |
+| **Static + execution**, run 3 (current rule): tolerance only for fractional answers, 10 s timeout | **1/200 = 0.5%** | **4/200 = 2.0%** |
+
+The three rows differ **only** in the output-comparison rule and the per-test timeout;
+the tools, the sample and the tests are identical. The rule alone moves both rates by
+percentage points, in opposite directions (§4.3).
 
 **Static analysis caught none of the 200 bugs, in any bug category.** Per-category recall
 was 0.00 for all eleven categories (call, control_flow, expression, literal, assignment,
 identifier, io, misc, variable_access, function, type_conversion). That is the headline
 RQ2 signal: these are logic bugs, and bandit and mypy are blind to them.
 
-Dynamic per-category recall in run 1 was 1.00 everywhere except `call` (0.99).
+Dynamic per-category recall under the current rule (run 3) is 1.00 in every category
+except `call` (0.99), including `type_conversion` (1.00), which run 2's over-broad
+tolerance had dropped to 0.50.
+
+**Run 3 is the configuration to quote.** Its 4 remaining false rejections are 3 correct
+programs still too slow for a 10 s per-test limit (pass rates 0.73, 0.98, 0.98) and 1
+whose expected output looks malformed upstream (entry 26394, pass rate 0.00). The single
+slip is entry 451069, the buggy program that passes all 103 of its own tests.
 
 ### 4.2 Cost (measured)
 - Static checks: ~0.5 s per tool (bandit ~0.30 s as a subprocess, mypy ~0.05 s in-process).
@@ -185,7 +197,9 @@ Adding a numeric tolerance and a 10 s timeout fixed 4 of those false rejections 
 **also let 4 genuinely buggy programs through**, because they print `1326.0` where `1326`
 is expected (float division instead of integer division), and recall for the
 `type_conversion` bug category fell to 0.5. The comparison rule now applies tolerance
-only when the expected answer is fractional. A third run with that rule is in progress.
+only when the expected answer is fractional. Run 3 confirms that this keeps both gains:
+false rejections 4 (down from 9) **and** slips back to 1, with `type_conversion` recall
+restored to 1.00.
 
 **This is a methodological result worth reporting:** the output-comparison rule is not a
 detail — it moves both the slip rate and the false-rejection rate by percentage points,

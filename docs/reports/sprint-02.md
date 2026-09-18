@@ -113,3 +113,27 @@ per-test timeout, both `ExecutionSettings`. Rerun of the same 200 entries in pro
 mistake, fixed in 25fdae4), `0c7916d` (runner), `8861507` (float tolerance + 10 s timeout)
 **Caveat:** these are pilot numbers on 200 of 11,665 held-out entries, and the execution arm
 uses the dataset's own tests (the best case). Generated-test arms come in RQ3.
+
+---
+
+### 2.6b: Comparison-rule pilots (runs 2 and 3)  (2026-09-17/18)
+**Status:** done
+**What was done:** Re-ran the same 200 entries after each change to the output-comparison
+rule. Run 2 (tolerance everywhere + 10 s timeout) fixed 4 false rejections but let 4
+integer/float bugs through. Inspecting them showed the tools print `1326.0` where `1326`
+is expected, i.e. exactly RunBugRun's `type_conversion` bug class. Run 3 applies tolerance
+only when the expected token is fractional.
+**Commands run + actual output:**
+```
+run 1 (exact text, 5 s):      slip 1/200 = 0.005 · false-reject 9/200 = 0.045 · unusable_fixed 9
+run 2 (tolerance all, 10 s):  slip 5/200 = 0.025 · false-reject 4/200 = 0.020 · unusable_fixed 4
+run 3 (tolerance fractional): slip 1/200 = 0.005 · false-reject 4/200 = 0.020 · unusable_fixed 4
+  wall clock 865-867 s each, 2.16 s/tool, 10 workers, 0 errors
+  run 1 -> run 2 verdict changes: 9, all REJECT->ACCEPT (4 fixed, 4 buggy, 1 timeout case)
+  run 2 dynamic recall type_conversion 0.50 -> run 3 1.00 (all categories 1.00 except call 0.99)
+  run 3 remaining false rejections: 3 timeouts (pass 0.73/0.98/0.98) + entry 26394 (pass 0.00)
+  run 3 remaining slip: entry 451069, passes all 103 of its own tests (dataset label noise)
+```
+**Decisions:** DECISIONS.md entry to follow in the next docs commit; rule implemented in
+`stages/s4_execute.outputs_match`.
+**Commit:** `8861507` (tolerance + 10 s), `886a2cc` (tolerance only for fractional answers)
