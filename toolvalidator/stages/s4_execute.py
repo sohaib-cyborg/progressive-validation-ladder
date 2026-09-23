@@ -10,16 +10,20 @@ rounded while Python prints full precision. Both were measured causes of wrongly
 rejecting correct programs (docs/reports/sprint-02.md).
 
 Tests come from the caller, or from what S3 accepted when none are given.
+
+The comparison rules and the harness text live in ``stages/harness.py``;
+``normalize_output`` and ``outputs_match`` are re-exported here for callers and tests.
 """
 
-import inspect
 import json
-import math
 from collections.abc import Sequence
 
 from pydantic import BaseModel, ConfigDict, JsonValue, ValidationError
 
 from toolvalidator.contracts import IOExample, Sandbox, StageResult, ToolArtifact, ValidationRecord
+from toolvalidator.stages.harness import STDIN_HARNESS, normalize_output, outputs_match
+
+__all__ = ["HarnessError", "normalize_output", "outputs_match", "run", "tests_from_record"]
 
 STAGE = "s4_execute"
 # 10s, not 5s: 4 of 9 pilot false rejections were slow-but-correct programs
@@ -37,49 +41,6 @@ class HarnessError(RuntimeError):
     """The in-sandbox harness failed: our bug, not a verdict on the tool."""
 
 
-def normalize_output(text: str) -> str:
-    """Trailing whitespace is not significant; everything else is."""
-    return "\n".join(line.rstrip() for line in text.rstrip().splitlines())
-
-
-def outputs_match(actual: str, expected: str, *, rel_tol: float, abs_tol: float) -> bool:
-    """Equal after normalisation, or equal token by token with float tolerance.
-
-    Competitive-programming expected outputs are rounded (``12.5663706144``) while
-    Python prints full precision (``12.566370614359172``). Comparing text alone
-    rejects correct programs, which measured 3 of 9 false rejections in the pilot.
-    """
-    actual, expected = normalize_output(actual), normalize_output(expected)
-    if actual == expected:
-        return True
-    actual_lines, expected_lines = actual.splitlines(), expected.splitlines()
-    if len(actual_lines) != len(expected_lines):
-        return False
-    for actual_line, expected_line in zip(actual_lines, expected_lines, strict=True):
-        actual_tokens, expected_tokens = actual_line.split(), expected_line.split()
-        if len(actual_tokens) != len(expected_tokens):
-            return False
-        for got, want in zip(actual_tokens, expected_tokens, strict=True):
-            if got != want and not _close(got, want, rel_tol, abs_tol):
-                return False
-    return True
-
-
-def _close(got: str, want: str, rel_tol: float, abs_tol: float) -> bool:
-    # Only when the EXPECTED answer is fractional. If the task expects 1326, then
-    # 1326.0 is wrong: that is exactly the int/float bug class RunBugRun labels
-    # type_conversion, and tolerating it hid 4 real bugs in the pilot.
-    if not any(char in want for char in ".eE"):
-        return False
-    try:
-        got_value, want_value = float(got), float(want)
-    except ValueError:
-        return False
-    if math.isnan(got_value) or math.isnan(want_value):
-        return False  # NaN never equals a real expected answer
-    return math.isclose(got_value, want_value, rel_tol=rel_tol, abs_tol=abs_tol)
-
-
 class _TestOutcome(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -93,61 +54,6 @@ class _TestOutcome(BaseModel):
 
 class _HarnessReport(BaseModel):
     results: list[_TestOutcome]
-
-
-_HARNESS_MAIN = """
-payload = json.load(sys.stdin)
-cap = payload["max_output_bytes"]
-preview = payload["preview_chars"]
-with open("tool.py", "w", encoding="utf-8") as handle:
-    handle.write(payload["code"])
-
-
-def limit_output():
-    resource.setrlimit(resource.RLIMIT_FSIZE, (cap, cap))
-
-
-results = []
-for index, case in enumerate(payload["tests"]):
-    with open("out", "wb") as out, open("err", "wb") as err:
-        proc = subprocess.Popen(
-            [sys.executable, "tool.py"], stdin=subprocess.PIPE, stdout=out, stderr=err,
-            preexec_fn=limit_output,
-        )
-        timed_out = False
-        try:
-            proc.communicate(case["input"].encode("utf-8"), timeout=payload["timeout_s"])
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.communicate()
-            timed_out = True
-    with open("out", "rb") as handle:
-        actual = handle.read(cap).decode("utf-8", "replace")
-    with open("err", "rb") as handle:
-        stderr = handle.read(cap).decode("utf-8", "replace")
-    returned = proc.returncode
-    code = returned if returned is None or returned >= 0 else 128 - returned
-    matches = outputs_match(
-        actual, case["output"], rel_tol=payload["rel_tol"], abs_tol=payload["abs_tol"]
-    )
-    passed = not timed_out and code == 0 and matches
-    results.append({
-        "index": index, "passed": passed, "timed_out": timed_out, "exit_code": code,
-        "actual": "" if passed else actual[:preview], "stderr": "" if passed else stderr[:preview],
-    })
-print(json.dumps({"results": results}))
-"""
-
-# The harness compares outputs with the very functions tested on the host.
-_HARNESS = "\n".join(
-    [
-        "import json, math, resource, subprocess, sys",
-        inspect.getsource(normalize_output),
-        inspect.getsource(outputs_match),
-        inspect.getsource(_close),
-        _HARNESS_MAIN,
-    ]
-)
 
 
 def run(
@@ -178,7 +84,7 @@ def run(
         }
     )
     overall = per_test * len(cases) + HARNESS_OVERHEAD_S
-    exec_result = sandbox.run(_HARNESS, stdin=payload, timeout_s=overall)
+    exec_result = sandbox.run(STDIN_HARNESS, stdin=payload, timeout_s=overall)
     if exec_result.timed_out:
         detail = f"harness exceeded the overall timeout of {overall:.0f}s"
         return record.add(StageResult(stage=STAGE, passed=False, category="timeout", detail=detail))
