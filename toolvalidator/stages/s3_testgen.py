@@ -6,9 +6,11 @@ S4 then runs the accepted tests. LLM/infrastructure failures raise (CLAUDE.md ru
 they do not become a verdict.
 """
 
+from collections.abc import Sequence
+
 from pydantic import JsonValue
 
-from toolvalidator.contracts import Sandbox, StageResult, ToolArtifact, ValidationRecord
+from toolvalidator.contracts import IOExample, Sandbox, StageResult, ToolArtifact, ValidationRecord
 from toolvalidator.llm.scads_client import ScadsClient
 from toolvalidator.testgen.generator import DEFAULT_TEST_COUNT, generate_tests
 from toolvalidator.testgen.judge import judge_suite
@@ -25,12 +27,21 @@ def run(
     client: ScadsClient,
     n: int = DEFAULT_TEST_COUNT,
     show_code: bool = True,
+    examples: Sequence[IOExample] = (),
 ) -> StageResult:
     """Generate ``n`` candidate tests and keep the ones the judge accepts.
 
     ``show_code=False`` hides the tool from the generator too (an RQ3 arm).
+    ``examples`` are dataset sample I/O; upstream requests carry none, so the caller
+    supplies them when the dataset has them.
     """
-    suite = generate_tests(client, record.request, code=artifact.code if show_code else None, n=n)
+    suite = generate_tests(
+        client,
+        record.request,
+        code=artifact.code if show_code else None,
+        n=n,
+        examples=examples,
+    )
     verdicts = judge_suite(client, record.request, suite.tests)
     accepted = [test for test, verdict in verdicts if verdict.valid]
     rejected = [(test, verdict) for test, verdict in verdicts if not verdict.valid]

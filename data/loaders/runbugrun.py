@@ -5,8 +5,10 @@ Raw files, git-ignored, in ``data/runbugrun_py/raw/`` (format: docs/MEMORY.md):
   tests_all.jsonl.gz            stdin -> expected stdout, keyed by problem_id
   problem_descriptions.tar.gz   CodeNet HTML statements (RunBugRun ships none)
 
-Programs are stdin/stdout scripts. The request's ``examples`` are the samples from
-the statement; ``tests`` are RunBugRun's held-out ground truth (DECISIONS.md).
+Programs are stdin/stdout scripts. Each problem is mapped onto the upstream
+Capability Request schema (docs/capability_request.md). The statement's sample I/O
+lives on the *entry*, not the request, because upstream requests carry no examples;
+``tests`` are RunBugRun's held-out ground truth (DECISIONS.md).
 """
 
 import gzip
@@ -20,7 +22,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from toolvalidator.contracts import CapabilityRequest, IOExample
+from toolvalidator.contracts import CapabilityRequest, IOExample, ParamSpec
 
 type Split = Literal["train", "valid", "test"]
 
@@ -47,7 +49,18 @@ class RunBugRunEntry(BaseModel):
     buggy_code: str
     fixed_code: str
     tests: list[IOExample]
+    examples: list[IOExample]
+    """Sample I/O from the problem statement. Dataset-only: upstream requests have none."""
     bug_labels: list[str]
+
+
+class ParsedProblem(BaseModel):
+    """What one CodeNet statement yields: a request, plus its sample I/O."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    request: CapabilityRequest
+    examples: list[IOExample]
 
 
 @dataclass
@@ -86,13 +99,13 @@ def iter_entries(
     pids = {row.problem_id for row in rows}
     tests = _read_tests(raw_dir / TESTS_FILE, pids)
     descriptions = _read_descriptions(raw_dir / DESCRIPTIONS_FILE, pids)
-    requests: dict[str, CapabilityRequest] = {}
+    problems: dict[str, ParsedProblem] = {}
     for row in rows:
         report.read += 1
         pid = row.problem_id
-        if pid not in requests and pid in descriptions:
-            requests[pid] = parse_description(pid, descriptions[pid])
-        if pid not in requests or not requests[pid].description:
+        if pid not in problems and pid in descriptions:
+            problems[pid] = parse_description(pid, descriptions[pid])
+        if pid not in problems or not problems[pid].request.description:
             report.skipped_no_description += 1
             continue
         if not tests.get(pid):
@@ -103,16 +116,23 @@ def iter_entries(
             entry_id=row.id,
             split=split,
             problem_id=pid,
-            request=requests[pid],
+            request=problems[pid].request,
             buggy_code=row.buggy_code,
             fixed_code=row.fixed_code,
             tests=tests[pid],
+            examples=problems[pid].examples,
             bug_labels=row.labels or [],
         )
 
 
-def parse_description(problem_id: str, raw_html: str) -> CapabilityRequest:
-    """Statement text plus the "Sample Input N" / "Sample Output N" pairs it contains."""
+def parse_description(problem_id: str, raw_html: str) -> ParsedProblem:
+    """One CodeNet statement → a Capability Request plus the statement's sample I/O.
+
+    The request follows the upstream schema (docs/capability_request.md §2). These
+    programs read all of stdin and print all of stdout, so that is what the single
+    input and output field describe. The mapping is dataset-derived, not produced by
+    the upstream capability matcher, and the report says so.
+    """
     inputs: dict[str, str] = {}
     outputs: dict[str, str] = {}
     for _, heading, pre in _HEADING_PRE.findall(raw_html):
@@ -122,9 +142,31 @@ def parse_description(problem_id: str, raw_html: str) -> CapabilityRequest:
         elif match := _SAMPLE_IN.search(title):
             inputs[match[1] or "1"] = _pre_text(pre)
     paired = sorted(inputs.keys() & outputs.keys(), key=int)
-    return CapabilityRequest(
-        name=problem_id,
+    request = CapabilityRequest(
+        name=f"solve_{problem_id}",
+        capability=f"solve_{problem_id}",
         description=_text(raw_html),
+        inputs=[
+            ParamSpec(
+                name="stdin",
+                type="string",
+                description="The program's entire standard input for one test case.",
+            )
+        ],
+        outputs=[
+            ParamSpec(
+                name="stdout",
+                type="string",
+                description="The exact standard output a correct program prints.",
+            )
+        ],
+        rationale=(
+            f"Derived from Project CodeNet problem {problem_id}: no available tool solves "
+            "this task, so a program implementing the statement is required."
+        ),
+    )
+    return ParsedProblem(
+        request=request,
         examples=[IOExample(input=inputs[k], output=outputs[k]) for k in paired],
     )
 

@@ -64,29 +64,38 @@ Height of the 1st mountain
 
 
 def test_atcoder_text_and_paired_samples() -> None:
-    req = parse_description("p02718", ATCODER_HTML)
-    assert req.name == "p02718"
-    assert req.description.startswith("Score : 200 points")
-    assert "Print Yes if N > 0." in req.description
-    assert req.examples == [
+    parsed = parse_description("p02718", ATCODER_HTML)
+    assert parsed.request.description.startswith("Score : 200 points")
+    assert "Print Yes if N > 0." in parsed.request.description
+    assert parsed.examples == [
         IOExample(input="4 1\n5 4 2 1\n", output="Yes\n"),
         IOExample(input="0 1\n", output="No\n"),
     ]
 
 
+def test_request_follows_the_upstream_capability_request_schema() -> None:
+    # docs/capability_request.md §2: name, capability, description, inputs, outputs, rationale.
+    request = parse_description("p02718", ATCODER_HTML).request
+    assert request.name == "solve_p02718"
+    assert request.capability == "solve_p02718"
+    assert [(p.name, p.type) for p in request.inputs] == [("stdin", "string")]
+    assert [(p.name, p.type) for p in request.outputs] == [("stdout", "string")]
+    assert request.rationale is not None and "p02718" in request.rationale
+
+
 def test_aoj_output_for_the_sample_input_and_leading_newline() -> None:
-    req = parse_description("p00001", AOJ_HTML)
-    assert req.description.startswith("List of Top 3 Hills")
+    parsed = parse_description("p00001", AOJ_HTML)
+    assert parsed.request.description.startswith("List of Top 3 Hills")
     # The <pre> under "Output" is not a sample; the leading newline after <pre> is dropped.
-    assert req.examples == [IOExample(input="1819\n2003\n", output="2003\n1819\n")]
+    assert parsed.examples == [IOExample(input="1819\n2003\n", output="2003\n1819\n")]
 
 
 def test_description_without_samples_has_no_examples() -> None:
-    req = parse_description(
+    parsed = parse_description(
         "p00000", "<H1>QQ</H1><p>Write a program.</p><H2>Input</H2><p>No input.</p>"
     )
-    assert req.examples == []
-    assert "Write a program." in req.description
+    assert parsed.examples == []
+    assert "Write a program." in parsed.request.description
 
 
 def test_unpaired_sample_is_ignored() -> None:
@@ -161,6 +170,7 @@ def test_iter_entries_builds_entries_and_reports_skips(raw_dir: Path) -> None:
     assert entry.split == "valid"
     assert entry.problem_id == "p1"
     assert entry.request.description == "Add one."
+    assert entry.request.capability == "solve_p1"
     assert entry.buggy_code == "print(int(input()) + 2)"
     assert entry.fixed_code == "print(int(input()) + 1)"
     assert entry.tests == [
@@ -202,4 +212,4 @@ def test_real_valid_split_loads() -> None:
     first = entries[0]
     assert first.problem_id == "p00000"
     assert first.tests and first.request.description
-    assert sum(bool(e.request.examples) for e in entries) > 0.9 * len(entries)
+    assert sum(bool(e.examples) for e in entries) > 0.9 * len(entries)

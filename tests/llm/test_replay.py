@@ -100,7 +100,7 @@ def test_from_run_merges_every_process_file(tmp_path: Path) -> None:
 
 def test_replay_drives_real_code_and_reproduces_the_result(tmp_path: Path) -> None:
     path = tmp_path / "calls.jsonl"
-    request = CapabilityRequest(name="t", description="Print the sum.")
+    request = CapabilityRequest(name="t", capability="t", description="Print the sum.")
     test = GeneratedTest(input="2 3", output="5")
 
     live: Any = TracingClient(

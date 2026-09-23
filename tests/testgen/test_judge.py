@@ -12,7 +12,9 @@ from toolvalidator.testgen.judge import build_user_prompt, judge_suite, judge_te
 from toolvalidator.testgen.schemas import GeneratedTest
 
 REQUEST = CapabilityRequest(
-    name="add_two", description="Read two integers separated by a space and print their sum."
+    name="add_two",
+    capability="add_two",
+    description="Read two integers separated by a space and print their sum.",
 )
 GOOD = GeneratedTest(input="2 3\n", output="5\n")
 BAD = GeneratedTest(input="2 3\n", output="6\n")

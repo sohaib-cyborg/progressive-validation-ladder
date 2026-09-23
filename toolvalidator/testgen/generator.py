@@ -5,7 +5,9 @@ reads and prints), but the description is the truth: expected outputs must follo
 from the task, never from what the code happens to do (docs/MEMORY.md).
 """
 
-from toolvalidator.contracts import CapabilityRequest
+from collections.abc import Sequence
+
+from toolvalidator.contracts import CapabilityRequest, IOExample, ParamSpec
 from toolvalidator.llm.scads_client import ScadsClient, parse_json_object
 from toolvalidator.testgen.schemas import GeneratedSuite
 
@@ -30,15 +32,32 @@ Rules:
 
 
 def build_user_prompt(
-    request: CapabilityRequest, code: str | None, n: int = DEFAULT_TEST_COUNT
+    request: CapabilityRequest,
+    code: str | None,
+    n: int = DEFAULT_TEST_COUNT,
+    examples: Sequence[IOExample] = (),
 ) -> str:
-    parts = [f"Task name: {request.name}", "", "Task description:", request.description.strip()]
-    if request.examples:
+    """Render the request (upstream schema) plus any dataset examples into a prompt.
+
+    ``examples`` are passed in rather than read from the request: upstream Capability
+    Requests carry no examples (docs/capability_request.md §2).
+    """
+    parts = [
+        f"Tool name: {request.name}",
+        f"Capability: {request.capability}",
+        "",
+        "What the tool must do:",
+        request.description.strip(),
+    ]
+    if request.inputs:
+        parts += ["", "Declared inputs:", *(f"- {_param(p)}" for p in request.inputs)]
+    if request.outputs:
+        parts += ["", "Declared outputs:", *(f"- {_param(p)}" for p in request.outputs)]
+    if request.rationale:
+        parts += ["", f"Why the tool is needed: {request.rationale.strip()}"]
+    if examples:
         parts += ["", "Examples from the task statement:"]
-        parts += [
-            f"- input: {example.input!r}\n  output: {example.output!r}"
-            for example in request.examples
-        ]
+        parts += [f"- input: {ex.input!r}\n  output: {ex.output!r}" for ex in examples]
     if code is not None:
         parts += [
             "",
@@ -57,9 +76,16 @@ def generate_tests(
     *,
     code: str | None = None,
     n: int = DEFAULT_TEST_COUNT,
+    examples: Sequence[IOExample] = (),
 ) -> GeneratedSuite:
     """Ask the generator for tests. Raises LLMError/LLMOutputError; never guesses."""
     result = client.complete(
-        "generator", system=SYSTEM_PROMPT, user=build_user_prompt(request, code, n)
+        "generator", system=SYSTEM_PROMPT, user=build_user_prompt(request, code, n, examples)
     )
     return GeneratedSuite.parse(parse_json_object(result.content))
+
+
+def _param(spec: ParamSpec) -> str:
+    optional = "" if spec.required else " (optional)"
+    description = f" — {spec.description}" if spec.description else ""
+    return f"{spec.name}: {spec.type}{optional}{description}"

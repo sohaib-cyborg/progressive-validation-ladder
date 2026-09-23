@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from toolvalidator.contracts import CapabilityRequest, ExecResult, IOExample, ValidationRecord
+from toolvalidator.contracts import CapabilityRequest, ExecResult, ParamSpec, ValidationRecord
 
 
 class FakeSandbox:
@@ -34,8 +34,10 @@ def record() -> ValidationRecord:
     return ValidationRecord(
         request=CapabilityRequest(
             name="celsius_to_fahrenheit",
+            capability="celsius_to_fahrenheit",
             description="Convert a temperature in Celsius to Fahrenheit.",
-            examples=[IOExample(input=100, output=212)],
+            inputs=[ParamSpec(name="stdin", type="string", description="Degrees Celsius")],
+            outputs=[ParamSpec(name="stdout", type="string", description="Degrees Fahrenheit")],
         )
     )
 

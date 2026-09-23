@@ -161,5 +161,5 @@ def test_tracing_client_works_wherever_scads_client_does() -> None:
             )
 
     client: Any = TracingClient(_JudgeClient(), TraceWriter(Path("unused"), enabled=False))
-    request = CapabilityRequest(name="t", description="d")
+    request = CapabilityRequest(name="t", capability="t", description="d")
     assert judge_test(client, request, GeneratedTest(input="1", output="2")).valid is True

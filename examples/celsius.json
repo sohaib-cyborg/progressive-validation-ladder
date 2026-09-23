@@ -1,9 +1,12 @@
 {
   "name": "celsius_to_fahrenheit",
-  "description": "Convert a temperature from degrees Celsius to degrees Fahrenheit.",
-  "examples": [
-    {"input": 0, "output": 32},
-    {"input": 100, "output": 212},
-    {"input": -40, "output": -40}
-  ]
+  "capability": "celsius_to_fahrenheit",
+  "description": "Read a temperature in degrees Celsius from standard input and print the same temperature in degrees Fahrenheit.",
+  "inputs": [
+    {"name": "stdin", "type": "string", "description": "One line holding the temperature in degrees Celsius."}
+  ],
+  "outputs": [
+    {"name": "stdout", "type": "string", "description": "The temperature in degrees Fahrenheit."}
+  ],
+  "rationale": "The agent had no unit-conversion tool available, so the task could not be completed."
 }

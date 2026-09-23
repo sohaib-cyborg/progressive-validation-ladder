@@ -23,22 +23,40 @@ class Verdict(StrEnum):
 
 
 class IOExample(_Frozen):
-    """One example from the Capability Request.
+    """One test case for a tool: an input and the output a correct tool produces.
 
-    Values are arbitrary JSON so the same type covers function-call style
-    (e.g. ``input=100``) and stdin/stdout style (e.g. ``input="100\\n"``).
+    Values are arbitrary JSON so the same type covers stdin/stdout tools
+    (``input="100\\n"``) and typed tools (``input={"celsius": 100}``). Test cases
+    are *not* part of the Capability Request: upstream requests carry no examples.
     """
 
     input: JsonValue
     output: JsonValue
 
 
-class CapabilityRequest(_Frozen):
-    """The task a tool must fulfil: what it is called, what it does, examples."""
+class ParamSpec(_Frozen):
+    """One input or output field of a requested tool."""
 
     name: str = Field(min_length=1)
+    type: str = Field(min_length=1)
+    description: str = ""
+    required: bool = True
+
+
+class CapabilityRequest(_Frozen):
+    """A structured spec for a missing tool that would close a capability gap.
+
+    This is the upstream (Project B) schema, documented in
+    ``docs/capability_request.md`` §2, and it loads that JSON unchanged. Keeping it
+    identical is the point: we validate the tools synthesized from these requests.
+    """
+
+    name: str = Field(min_length=1)
+    capability: str = Field(min_length=1)
     description: str
-    examples: list[IOExample] = Field(default_factory=list)
+    inputs: list[ParamSpec] = Field(default_factory=list)
+    outputs: list[ParamSpec] = Field(default_factory=list)
+    rationale: str | None = None
 
 
 class ToolArtifact(_Frozen):

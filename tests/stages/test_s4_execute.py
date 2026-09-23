@@ -21,7 +21,7 @@ from toolvalidator.sandbox.exec import DockerSandbox
 from toolvalidator.stages import s4_execute
 from toolvalidator.stages.s4_execute import HarnessError, normalize_output, outputs_match
 
-_REQUEST = CapabilityRequest(name="add_one", description="Read n, print n+1.")
+_REQUEST = CapabilityRequest(name="add_one", capability="add_one", description="Read n, print n+1.")
 TESTS = [IOExample(input="1", output="2"), IOExample(input="5", output="6")]
 ADD_ONE = "print(int(input()) + 1)"
 

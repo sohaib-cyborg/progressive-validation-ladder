@@ -26,10 +26,11 @@ def _entry(entry_id: int, problem_id: str = "p1", buggy: str = "print(2)") -> Ru
         entry_id=entry_id,
         split="valid",
         problem_id=problem_id,
-        request=CapabilityRequest(name=problem_id, description="Print 1."),
+        request=CapabilityRequest(name=problem_id, capability=problem_id, description="Print 1."),
         buggy_code=buggy,
         fixed_code="print(1)",
         tests=[IOExample(input="", output="1")],
+        examples=[],
         bug_labels=["literal.number.integer.change"],
     )
 

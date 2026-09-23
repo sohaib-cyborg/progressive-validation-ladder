@@ -6,15 +6,19 @@ from typing import Any
 import pytest
 
 from toolvalidator.config import load_settings
-from toolvalidator.contracts import CapabilityRequest, IOExample
+from toolvalidator.contracts import CapabilityRequest, IOExample, ParamSpec
 from toolvalidator.llm.scads_client import LLMOutputError, LLMResult, ScadsClient
 from toolvalidator.testgen.generator import build_user_prompt, generate_tests
 
 REQUEST = CapabilityRequest(
     name="add_two",
+    capability="add_two",
     description="Read two integers separated by a space and print their sum.",
-    examples=[IOExample(input="2 3\n", output="5\n")],
+    inputs=[ParamSpec(name="stdin", type="string", description="Two integers, space separated")],
+    outputs=[ParamSpec(name="stdout", type="string", description="Their sum")],
+    rationale="No available tool adds two numbers from stdin.",
 )
+EXAMPLES = [IOExample(input="2 3\n", output="5\n")]
 
 
 class _FakeClient:
@@ -38,12 +42,35 @@ def _client(content: str) -> Any:
     return _FakeClient(content)
 
 
-def test_prompt_contains_description_examples_and_code() -> None:
-    prompt = build_user_prompt(REQUEST, "print(sum(map(int, input().split())))", n=3)
+def test_prompt_contains_the_request_fields_examples_and_code() -> None:
+    prompt = build_user_prompt(REQUEST, "print(sum(map(int, input().split())))", 3, EXAMPLES)
     assert "Read two integers" in prompt
-    assert repr(REQUEST.examples[0].input) in prompt  # examples appear escaped, not raw
+    assert "Capability: add_two" in prompt
+    assert "stdin: string" in prompt  # declared inputs
+    assert "stdout: string" in prompt  # declared outputs
+    assert "No available tool adds" in prompt  # rationale
+    assert repr(EXAMPLES[0].input) in prompt  # examples appear escaped, not raw
     assert "print(sum" in prompt
     assert "Write 3 test cases" in prompt
+
+
+def test_optional_inputs_are_marked() -> None:
+    request = CapabilityRequest(
+        name="search",
+        capability="search",
+        description="d",
+        inputs=[
+            ParamSpec(name="q", type="string", description="query"),
+            ParamSpec(name="limit", type="integer", description="max hits", required=False),
+        ],
+    )
+    prompt = build_user_prompt(request, None)
+    assert "q: string — query" in prompt
+    assert "limit: integer (optional)" in prompt
+
+
+def test_prompt_without_examples_omits_that_section() -> None:
+    assert "Examples from the task statement" not in build_user_prompt(REQUEST, None)
 
 
 def test_prompt_without_code_says_nothing_about_source() -> None:

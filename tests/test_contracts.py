@@ -9,6 +9,7 @@ from toolvalidator.contracts import (
     ExecResult,
     FailureReport,
     IOExample,
+    ParamSpec,
     Sandbox,
     StageResult,
     ToolArtifact,
@@ -20,34 +21,79 @@ from toolvalidator.contracts import (
 def _request() -> CapabilityRequest:
     return CapabilityRequest(
         name="celsius_to_fahrenheit",
+        capability="celsius_to_fahrenheit",
         description="Convert a temperature in Celsius to Fahrenheit.",
-        examples=[IOExample(input=100, output=212), IOExample(input="0\n", output="32\n")],
+        inputs=[ParamSpec(name="celsius", type="number", description="Degrees Celsius")],
+        outputs=[ParamSpec(name="fahrenheit", type="number", description="Degrees Fahrenheit")],
+        rationale="The task needs a unit conversion no available tool provides.",
     )
 
 
-# --- CapabilityRequest / IOExample ---------------------------------------------
+# --- CapabilityRequest / ParamSpec ---------------------------------------------
 
 
-def test_capability_request_holds_examples() -> None:
+def test_capability_request_carries_the_upstream_fields() -> None:
     req = _request()
     assert req.name == "celsius_to_fahrenheit"
-    assert req.examples[0].input == 100
-    assert req.examples[1].output == "32\n"
+    assert req.capability == "celsius_to_fahrenheit"
+    assert (req.inputs[0].name, req.inputs[0].type) == ("celsius", "number")
+    assert req.outputs[0].name == "fahrenheit"
+    assert req.rationale is not None
 
 
-def test_capability_request_examples_default_empty() -> None:
-    req = CapabilityRequest(name="t", description="d")
-    assert req.examples == []
+def test_inputs_outputs_default_empty_and_rationale_optional() -> None:
+    # Upstream defaults (docs/capability_request.md §2): inputs/outputs [], rationale None.
+    req = CapabilityRequest(name="t", capability="t", description="d")
+    assert req.inputs == [] and req.outputs == [] and req.rationale is None
 
 
-def test_capability_request_rejects_empty_name() -> None:
-    with pytest.raises(ValidationError):
-        CapabilityRequest(name="", description="d")
+def test_upstream_json_loads_unchanged() -> None:
+    # Verbatim shape emitted by the capability matcher (docs/capability_request.md §2).
+    payload = {
+        "name": "realtime_weather",
+        "capability": "realtime_weather",
+        "description": "Fetch current weather conditions from a live weather API",
+        "inputs": [{"name": "location", "type": "string", "description": "City or region"}],
+        "outputs": [
+            {"name": "temperature", "type": "string", "description": "Current temperature"},
+            {"name": "condition", "type": "string", "description": "Weather condition"},
+        ],
+        "rationale": "The task requires accessing real-time weather data.",
+    }
+    req = CapabilityRequest.model_validate(payload)
+    assert [p.name for p in req.outputs] == ["temperature", "condition"]
+    assert req.inputs[0].required is True  # required unless the payload says otherwise
+
+
+def test_param_spec_required_flag_round_trips() -> None:
+    payload = {"name": "q", "type": "string", "description": "d", "required": False}
+    assert ParamSpec.model_validate(payload).required is False
+
+
+def test_capability_request_requires_name_capability_and_description() -> None:
+    for payload in (
+        {"capability": "c", "description": "d"},
+        {"name": "n", "description": "d"},
+        {"name": "n", "capability": "c"},
+        {"name": "", "capability": "c", "description": "d"},
+        {"name": "n", "capability": "", "description": "d"},
+    ):
+        with pytest.raises(ValidationError):
+            CapabilityRequest.model_validate(payload)
 
 
 def test_capability_request_rejects_unknown_field() -> None:
     with pytest.raises(ValidationError):
-        CapabilityRequest.model_validate({"name": "t", "description": "d", "exmaples": []})
+        CapabilityRequest.model_validate(
+            {"name": "t", "capability": "t", "description": "d", "examples": []}
+        )
+
+
+def test_io_example_covers_both_tool_shapes() -> None:
+    # IOExample is a TEST CASE now, not part of the request: stdin/stdout or typed args.
+    assert IOExample(input="0\n", output="32\n").output == "32\n"
+    typed = IOExample(input={"celsius": 100}, output={"fahrenheit": 212})
+    assert typed.input == {"celsius": 100}
 
 
 def test_capability_request_is_immutable() -> None:

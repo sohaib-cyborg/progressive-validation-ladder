@@ -16,7 +16,7 @@ from toolvalidator.contracts import (
 )
 from toolvalidator.pipeline import run_pipeline, static_stages
 
-REQUEST = CapabilityRequest(name="t", description="d")
+REQUEST = CapabilityRequest(name="t", capability="t", description="d")
 TOOL = ToolArtifact(tool_id="t1", code="x = 1\n")
 
 
