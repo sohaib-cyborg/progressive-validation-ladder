@@ -7,6 +7,8 @@ The harness injects the very functions tested here, so the rule has one definiti
 import inspect
 import math
 
+from toolvalidator.stages.compare import values_match
+
 STDIN_HARNESS_IMPORTS = "import json, math, resource, subprocess, sys"
 
 
@@ -104,5 +106,101 @@ STDIN_HARNESS = "\n".join(
         inspect.getsource(outputs_match),
         inspect.getsource(_close),
         STDIN_HARNESS_MAIN,
+    ]
+)
+
+
+# --- function-call mode ----------------------------------------------------------
+
+# Runs ONE typed case: import the tool, call the entrypoint, print the value as JSON.
+# The tool's own stdout is redirected to stderr so printing cannot corrupt the reply.
+FUNCTION_DRIVER = """
+import contextlib, importlib.util, json, sys
+
+payload = json.load(open("payload.json", encoding="utf-8"))
+case = payload["tests"][int(sys.argv[1])]
+spec = importlib.util.spec_from_file_location("tool", "tool.py")
+module = importlib.util.module_from_spec(spec)
+with contextlib.redirect_stdout(sys.stderr):
+    spec.loader.exec_module(module)
+
+wanted = payload["entrypoint"]
+func = getattr(module, wanted, None)
+if not callable(func):
+    defined = sorted(
+        name
+        for name, value in vars(module).items()
+        if callable(value) and not name.startswith("_")
+        and getattr(value, "__module__", None) == "tool"
+    )
+    if len(defined) == 1:
+        func = getattr(module, defined[0])
+    else:
+        sys.stderr.write("TV_NO_ENTRYPOINT: wanted %r, module defines %r" % (wanted, defined))
+        raise SystemExit(3)
+
+args = case["input"]
+with contextlib.redirect_stdout(sys.stderr):
+    value = func(**args) if isinstance(args, dict) else func(args)
+sys.stdout.write(json.dumps({"value": value}, default=str))
+"""
+
+FUNCTION_HARNESS_MAIN = """
+payload = json.load(sys.stdin)
+cap = payload["max_output_bytes"]
+preview = payload["preview_chars"]
+for name, text in (("tool.py", payload["code"]), ("driver.py", payload["driver"])):
+    with open(name, "w", encoding="utf-8") as handle:
+        handle.write(text)
+with open("payload.json", "w", encoding="utf-8") as handle:
+    json.dump(payload, handle)
+
+
+def limit_output():
+    resource.setrlimit(resource.RLIMIT_FSIZE, (cap, cap))
+
+
+results = []
+for index, case in enumerate(payload["tests"]):
+    with open("out", "wb") as out, open("err", "wb") as err:
+        proc = subprocess.Popen(
+            [sys.executable, "driver.py", str(index)], stdout=out, stderr=err,
+            preexec_fn=limit_output,
+        )
+        timed_out = False
+        try:
+            proc.wait(timeout=payload["timeout_s"])
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+            timed_out = True
+    with open("out", "rb") as handle:
+        raw = handle.read(cap).decode("utf-8", "replace")
+    with open("err", "rb") as handle:
+        stderr = handle.read(cap).decode("utf-8", "replace")
+    returned = proc.returncode
+    code = returned if returned is None or returned >= 0 else 128 - returned
+    passed = False
+    if not timed_out and code == 0:
+        try:
+            value = json.loads(raw)["value"]
+        except Exception:
+            code = 4  # the driver did not answer with JSON: treat as a failed call
+        else:
+            passed = values_match(
+                value, case["output"], rel_tol=payload["rel_tol"], abs_tol=payload["abs_tol"]
+            )
+    results.append({
+        "index": index, "passed": passed, "timed_out": timed_out, "exit_code": code,
+        "actual": "" if passed else raw[:preview], "stderr": "" if passed else stderr[:preview],
+    })
+print(json.dumps({"results": results}))
+"""
+
+FUNCTION_HARNESS = "\n".join(
+    [
+        "import json, math, resource, subprocess, sys",
+        inspect.getsource(values_match),
+        FUNCTION_HARNESS_MAIN,
     ]
 )

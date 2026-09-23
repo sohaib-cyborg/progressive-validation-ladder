@@ -12,6 +12,7 @@ from toolvalidator.contracts import (
     CapabilityRequest,
     ExecResult,
     IOExample,
+    ParamSpec,
     StageResult,
     ToolArtifact,
     ValidationRecord,
@@ -19,7 +20,12 @@ from toolvalidator.contracts import (
 from toolvalidator.sandbox.container import provision
 from toolvalidator.sandbox.exec import DockerSandbox
 from toolvalidator.stages import s4_execute
-from toolvalidator.stages.s4_execute import HarnessError, normalize_output, outputs_match
+from toolvalidator.stages.s4_execute import (
+    HarnessError,
+    execution_mode,
+    normalize_output,
+    outputs_match,
+)
 
 _REQUEST = CapabilityRequest(name="add_one", capability="add_one", description="Read n, print n+1.")
 TESTS = [IOExample(input="1", output="2"), IOExample(input="5", output="6")]
@@ -306,3 +312,112 @@ def test_malformed_s3_test_entries_are_ignored() -> None:
     rec.add(StageResult(stage="s3_testgen", passed=True, data={"tests": "not a list"}))
     sandbox = _sandbox_returning([])
     assert s4_execute.run(_tool(), rec, sandbox).category == "no_tests"
+
+
+# --- typed function-call mode ----------------------------------------------------
+
+_TYPED_REQUEST = CapabilityRequest(
+    name="celsius_to_fahrenheit",
+    capability="celsius_to_fahrenheit",
+    description="Convert Celsius to Fahrenheit.",
+    inputs=[ParamSpec(name="celsius", type="number", description="Degrees Celsius")],
+    outputs=[ParamSpec(name="fahrenheit", type="number", description="Degrees Fahrenheit")],
+)
+_TYPED_TESTS = [
+    IOExample(input={"celsius": 100}, output={"fahrenheit": 212}),
+    IOExample(input={"celsius": -40}, output={"fahrenheit": -40}),
+]
+_TYPED_TOOL = (
+    "def celsius_to_fahrenheit(celsius):\n    return {'fahrenheit': celsius * 9 / 5 + 32}\n"
+)
+
+
+def test_execution_mode_follows_the_declared_inputs() -> None:
+    assert execution_mode(_TYPED_REQUEST) == "function"
+    assert execution_mode(_REQUEST) == "stdin"  # no declared inputs
+    stdin_request = CapabilityRequest(
+        name="solve_p1",
+        capability="solve_p1",
+        description="d",
+        inputs=[ParamSpec(name="stdin", type="string", description="all of stdin")],
+    )
+    assert execution_mode(stdin_request) == "stdin"
+
+
+def test_function_mode_payload_carries_entrypoint_driver_and_typed_cases() -> None:
+    record = ValidationRecord(request=_TYPED_REQUEST)
+    sandbox = _sandbox_returning([_result(0), _result(1)])
+    s4_execute.run(_tool(_TYPED_TOOL), record, sandbox, tests=_TYPED_TESTS)
+    script, stdin, _ = sandbox.calls[0]
+    payload = json.loads(stdin)
+    assert payload["mode"] == "function"
+    assert payload["entrypoint"] == "celsius_to_fahrenheit"
+    assert payload["tests"][0]["input"] == {"celsius": 100}  # not stringified
+    assert payload["tests"][0]["output"] == {"fahrenheit": 212}
+    assert "values_match" in script  # typed comparison is injected
+    assert "driver" in payload
+
+
+def test_stdin_mode_still_stringifies_cases() -> None:
+    record = ValidationRecord(request=_REQUEST)
+    sandbox = _sandbox_returning([_result(0), _result(1)])
+    s4_execute.run(_tool(), record, sandbox, tests=TESTS)
+    payload = json.loads(sandbox.calls[0][1])
+    assert payload["mode"] == "stdin"
+    assert payload["tests"][0]["input"] == "1"
+    assert "entrypoint" not in payload
+
+
+def test_explicit_mode_overrides_the_request() -> None:
+    record = ValidationRecord(request=_TYPED_REQUEST)
+    sandbox = _sandbox_returning([_result(0)])
+    s4_execute.run(_tool(), record, sandbox, tests=[TESTS[0]], mode="stdin")
+    assert json.loads(sandbox.calls[0][1])["mode"] == "stdin"
+
+
+@pytest.mark.slow
+def test_real_typed_tool_passes(sandbox: DockerSandbox) -> None:
+    record = ValidationRecord(request=_TYPED_REQUEST)
+    res = s4_execute.run(_tool(_TYPED_TOOL), record, sandbox, tests=_TYPED_TESTS)
+    assert res.passed
+    assert res.data["pass_rate"] == 1.0
+
+
+@pytest.mark.slow
+def test_real_typed_tool_with_wrong_maths_fails(sandbox: DockerSandbox) -> None:
+    record = ValidationRecord(request=_TYPED_REQUEST)
+    wrong = "def celsius_to_fahrenheit(celsius):\n    return {'fahrenheit': celsius * 5 / 9 + 32}\n"
+    res = s4_execute.run(_tool(wrong), record, sandbox, tests=_TYPED_TESTS)
+    assert not res.passed
+    assert res.category == "wrong_output"
+
+
+@pytest.mark.slow
+def test_real_typed_tool_printing_to_stdout_still_passes(sandbox: DockerSandbox) -> None:
+    # A tool that prints must not corrupt the driver's JSON reply.
+    noisy = (
+        "def celsius_to_fahrenheit(celsius):\n"
+        "    print('debug', celsius)\n"
+        "    return {'fahrenheit': celsius * 9 / 5 + 32}\n"
+    )
+    record = ValidationRecord(request=_TYPED_REQUEST)
+    assert s4_execute.run(_tool(noisy), record, sandbox, tests=_TYPED_TESTS).passed
+
+
+@pytest.mark.slow
+def test_real_typed_tool_missing_the_entrypoint_is_reported(sandbox: DockerSandbox) -> None:
+    record = ValidationRecord(request=_TYPED_REQUEST)
+    res = s4_execute.run(
+        _tool("def other(x):\n    return x\n"), record, sandbox, tests=_TYPED_TESTS
+    )
+    assert not res.passed
+    assert res.category == "no_entrypoint"
+
+
+@pytest.mark.slow
+def test_real_typed_tool_that_raises_is_a_crash(sandbox: DockerSandbox) -> None:
+    record = ValidationRecord(request=_TYPED_REQUEST)
+    boom = "def celsius_to_fahrenheit(celsius):\n    raise ValueError('nope')\n"
+    res = s4_execute.run(_tool(boom), record, sandbox, tests=_TYPED_TESTS)
+    assert res.category == "crash"
+    assert "ValueError" in json.dumps(res.data["failures"])
