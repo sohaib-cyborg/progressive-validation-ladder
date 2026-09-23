@@ -52,3 +52,10 @@ def test_invalid_request_json_is_a_usage_error(tmp_path: Path) -> None:
     with pytest.raises(SystemExit) as exc:
         main(["validate", "--tool", str(EXAMPLES / "celsius.py"), "--request", str(bad)])
     assert exc.value.code == 2
+
+
+def test_prompts_command_prints_the_catalogue(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["prompts"]) == 0
+    printed = capsys.readouterr().out
+    assert "generate_tests@v1" in printed
+    assert "judge_test@v1" in printed

@@ -12,7 +12,8 @@ from pydantic import JsonValue
 
 from toolvalidator.contracts import IOExample, Sandbox, StageResult, ToolArtifact, ValidationRecord
 from toolvalidator.llm.scads_client import ScadsClient
-from toolvalidator.testgen.generator import DEFAULT_TEST_COUNT, generate_tests
+from toolvalidator.prompts.testgen import DEFAULT_TEST_COUNT
+from toolvalidator.testgen.generator import generate_tests
 from toolvalidator.testgen.judge import judge_suite
 
 STAGE = "s3_testgen"
