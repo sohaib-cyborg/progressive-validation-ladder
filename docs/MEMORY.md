@@ -16,7 +16,9 @@ running session log. Update the session log every time you finish work.
 ## What (the project in five sentences)
 
 Project D validates LLM-synthesized tools. Input: a tool (Python) + a Capability
-Request (task + example I/O), coming from Project C in the pipeline B→C→D→A. It
+Request in Project B's schema (`name`, `capability`, `description`, typed
+`inputs`/`outputs`, `rationale` — see `docs/capability_request.md`), with the tool
+coming from Project C in the pipeline B→C→D→A. It
 runs the tool through staged checks (parse → static → sandboxed execution →
 mutation → semantic) and returns ACCEPT / REJECT / NEEDS_REVIEW + a reliability
 score + repair signals. It is a **research project**: the output is experiments +
@@ -104,14 +106,14 @@ a report. Evaluated on the **RunBugRun** dataset, Python subset only.
   (`<H2>Sample Input N</H2>` + `<H2>Output for the Sample Input N</H2>`).
 - Raw downloads live in `data/runbugrun_py/raw/` (git-ignored); sha256 in sprint-01.md.
 - **Expected outputs are not newline-consistent:** 17,108/321,418 (5.3%) lack a trailing
-  newline, 1,008 end in spaces/tabs, 0 contain `
-`, 8 are empty. S4 must normalise trailing
-  whitespace or it will fail correct programs.
+  newline, 1,008 end in spaces/tabs, none contain a carriage return, 8 are empty. S4 must
+  normalise trailing whitespace or it will fail correct programs.
 - **Sandbox image** `toolvalidator-sandbox:py3.12` (numpy 1.26.4, mutmut 3.8.0, pytest 9.1.1) must be
   built once: `docker build -t toolvalidator-sandbox:py3.12 toolvalidator/sandbox`.
 - **mutmut 3 does not mutate module-level code** (0 mutants on a script; 10 once wrapped in
   `def main()`). ~86% of RunBugRun entries have no `def`, so arm A must wrap scripts first.
-- **Docker Desktop memory is 1.9 GiB** → at most 3 parallel 512m sandboxes until raised.
+- **Docker Desktop memory was raised to 8 GB** (2026-09-17) → 10 parallel workers on this
+  12-CPU machine. It was 1.9 GiB before, which allowed only 3.
 - **Experiment scale:** seeded subsets (Tier 1: 2,000 entries; Tier 2: 300 + 50 dev),
   one container per tool, W parallel workers (DECISIONS.md).
 - **Sandbox cost (measured):** ~0.3 s per `DockerSandbox.run`; static S1+S2 ~0.5 s per real
@@ -187,3 +189,17 @@ Status (fill in after running):
   max_output_bytes. 96 tests, gate green. Smoke on 10 real entries OK. Tagged `sprint-1`.
 - Next: Sprint 2 (LLM client, testgen, S4 with batched runs + output normalisation).
   Open for Sohaib: numpy sandbox image; subsample/parallelism (R7); run mutmut_probe.
+
+### Day 7 (2026-09-23) — align to the upstream Capability Request schema; agent groundwork
+- **Contract change (approved):** `CapabilityRequest` is now Project B's schema verbatim
+  (`name`, `capability`, `description`, typed `inputs`/`outputs`, `rationale`); see
+  `docs/capability_request.md`. `examples` moved off the request onto
+  `RunBugRunEntry.examples` — upstream requests have none. RunBugRun maps on as
+  `solve_<problem_id>` with a single stdin/stdout field pair.
+- S4 gained a **typed function-call mode** (chosen from the declared inputs), with
+  structural output comparison. Unit-tested only: Docker was down, so the six real
+  typed tests skipped. **Unverified in a container.**
+- Added: langgraph (pinned, verified), LLM call **tracing**, **offline replay**,
+  **prompt registry** + generated `docs/PROMPTS.md`. New docs: ARCHITECTURE, LLM, WORKFLOW.
+- 257 tests green (22 skipped, Docker off). Schedule: Day 7 of 14, RQ3/RQ4/RQ5 still empty.
+- Next: start Docker → run the skipped tests; then S5b, S6 and the RQ3/RQ4 experiments.

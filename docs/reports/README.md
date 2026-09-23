@@ -11,6 +11,11 @@ Nothing here is aspirational. If something wasn't run, the report says so.
 | [sprint-01.md](sprint-01.md) | Work log for Sprint 1 (the spine). ✅ complete, tag `sprint-1`. |
 | [sprint-02.md](sprint-02.md) | Work log for Sprint 2 (dynamic signals). In progress. |
 
+Project-level docs live one level up: `ARCHITECTURE.md` (layers, module map, diagrams),
+`PROMPTS.md` (generated prompt appendix), `LLM.md` (models, tracing, cost),
+`WORKFLOW.md` (how code and experiments are run), `capability_request.md` (the upstream
+schema we consume).
+
 ## How these relate to the other docs
 
 - `docs/PLAN.md`: the research plan (the *why*). Not modified by reports.

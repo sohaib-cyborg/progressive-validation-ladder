@@ -37,7 +37,9 @@ toolvalidator/                     # ← repo root
 │   │   ├── s1_parse.py            # S1: ast.parse; SyntaxError → reject
 │   │   ├── s2_static.py           # S2: bandit (danger) + mypy (types)  [minimal]
 │   │   ├── s3_testgen.py          # S3: orchestrates generation + judging
-│   │   ├── s4_execute.py          # S4: run tool vs generated tests IN sandbox
+│   │   ├── s4_execute.py          # S4: run tool vs tests IN sandbox (stdin or typed call)
+│   │   ├── harness.py             # the scripts that run inside the container + text compare
+│   │   ├── compare.py             # structural comparison of typed outputs
 │   │   ├── s5_mutation.py         # S5: mutation testing, dispatches to both arms
 │   │   ├── s5b_rubberduck.py      # S5b: LLM explains code → semantic signal
 │   │   ├── s6_score.py            # S6: assemble signals → reliability score
@@ -66,9 +68,16 @@ toolvalidator/                     # ← repo root
 │   │   ├── signals.py             # Signal type; collect signals from a record
 │   │   └── model.py               # the fitted logistic regression + calibration
 │   │
+│   ├── prompts/                   # versioned prompt registry (docs/PROMPTS.md is generated)
+│   │   ├── __init__.py            # REGISTRY + lookup + markdown_catalogue
+│   │   ├── spec.py                # PromptSpec + the docs renderer
+│   │   └── testgen.py             # generate_tests@v1, judge_test@v1
+│   │
 │   ├── llm/                       # SCADS client (the only place network-to-LLM lives)
 │   │   ├── __init__.py
-│   │   └── scads_client.py        # sync+async, retry, typed LLMResult, JSON parse
+│   │   ├── scads_client.py        # sync, retry, typed LLMResult, defensive JSON parse
+│   │   ├── trace.py               # one JSONL row per call: provenance, tokens, latency
+│   │   └── replay.py              # re-derive a result offline from a trace
 │   │
 │   └── repair.py                  # builds FailureReport (repair signals) from a record
 │

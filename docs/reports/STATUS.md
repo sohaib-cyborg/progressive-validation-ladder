@@ -1,10 +1,12 @@
 # Project D — Status Report
 
-**As of:** 2026-09-17 (Day 1 of the 14-day plan) · **Branch:** main · **Gate:** green
+**As of:** 2026-09-23 (Day 7 of the 14-day plan) · **Branch:** main · **Gate:** green
 (`ruff format . && ruff check . && mypy --strict toolvalidator data experiments && pytest -q`)
 
 A snapshot of what exists, how it works, what has actually been run, and what the
-numbers say so far. Every number below comes from a real run; nothing is estimated
+numbers say so far. Architecture: [../ARCHITECTURE.md](../ARCHITECTURE.md) ·
+Prompts: [../PROMPTS.md](../PROMPTS.md) · LLM setup: [../LLM.md](../LLM.md) ·
+Workflow: [../WORKFLOW.md](../WORKFLOW.md). Every number below comes from a real run; nothing is estimated
 unless it says "estimate". Detailed per-task logs: [sprint-01.md](sprint-01.md),
 [sprint-02.md](sprint-02.md). Decisions with rationale: [../DECISIONS.md](../DECISIONS.md).
 
@@ -12,15 +14,17 @@ unless it says "estimate". Detailed per-task logs: [sprint-01.md](sprint-01.md),
 
 ## 1. What the system does today
 
-A tool (a Python program) plus a Capability Request (task description + example I/O)
-goes through staged checks and comes out with a verdict, ACCEPT or REJECT:
+A tool (a Python program) plus a **Capability Request in Project B's schema**
+(`name`, `capability`, `description`, typed `inputs`/`outputs`, `rationale` —
+see [../capability_request.md](../capability_request.md)) goes through staged checks and
+comes out with a verdict, ACCEPT or REJECT:
 
 | Stage | What it does | Status |
 |---|---|---|
 | S1 parse | `ast.parse`; syntax errors and parser overflow → REJECT | ✅ built |
 | S2 static | bandit (dangerous calls, hard gate) + mypy (type errors, soft signal) | ✅ built |
 | S3 test-gen | generator proposes tests, independent judge filters them | ✅ built (not yet run at scale) |
-| S4 execute | runs the tool against tests **inside the sandbox** | ✅ built |
+| S4 execute | runs the tool against tests **inside the sandbox**, stdin *or* typed function call | ✅ built (typed mode unverified in a container) |
 | S5 mutation | mutation testing, two arms | ❌ not built |
 | S5b rubber-duck | LLM explains the code; compare to the description | ❌ not built |
 | S6 score | reliability score fit from data | ❌ not built |
@@ -30,9 +34,10 @@ Supporting parts that exist: the pipeline state machine, contracts, settings, th
 RunBugRun loader, the Docker sandbox (container + execution), the SCADS LLM client,
 repair signals, a CLI, and one experiment runner.
 
-**Size:** 1,786 lines of library + loader + experiment code, 2,138 lines of tests.
-*(Debt: `stages/s4_execute.py` is 238 lines, over the ~200-line smell threshold in
-CLAUDE.md §2. It should be split, probably harness vs. stage logic.)*
+**Size:** 2,555 lines of library + loader + experiment code. 257 tests, 27 of them
+against real infrastructure.
+*(That debt is paid: `s4_execute` was split into stage logic, `harness.py` and
+`compare.py`, all under the size limit.)*
 
 ---
 
@@ -48,8 +53,12 @@ CLAUDE.md §2. It should be split, probably harness vs. stage logic.)*
   (median ~103 per problem in the valid split).
 - **Problem statements are NOT in RunBugRun.** They come from IBM Project CodeNet
   (`problem_descriptions.tar.gz`), covering 3,924 of the 3,926 problems that have tests.
-  The Capability Request is: name = problem id, description = statement text,
-  examples = the "Sample Input/Output" pairs parsed from that statement.
+- **Each problem is mapped onto the upstream request schema:** `name` and `capability`
+  are `solve_<problem_id>`, `description` is the statement text, and `inputs`/`outputs`
+  declare the single `stdin`/`stdout` string, because these programs read all of stdin
+  and print all of stdout. The statement's "Sample Input/Output" pairs are **not** part
+  of the request (upstream requests have none); they live on the dataset entry. The
+  mapping is dataset-derived, not produced by the upstream matcher, and the report says so.
 - **Held-out pool for experiments:** `valid` + `test` = 11,665 entries. The `train`
   split is untouched so far.
 - **Framing (unchanged from PLAN.md):** these are human-written bugs used as a proxy
@@ -83,7 +92,15 @@ Image: `toolvalidator-sandbox:py3.12` = `python:3.12-slim` (digest-pinned) + num
    (RunBugRun labels it `type_conversion`), and tolerating it hid 4 real bugs (§4.3).
 3. A test passes only if the program also exits 0 and does not time out.
 
-### 2.5 Models (pinned, not optimised)
+### 2.5 How the tool is invoked
+`s4_execute.execution_mode(request)` reads the declared inputs: a request whose only
+input is `stdin` describes a stdin/stdout program; named typed parameters mean the tool
+is a function to call with keyword arguments, which is what real upstream requests
+describe (`realtime_weather`: `location` → `temperature`, `condition`). Typed outputs are
+compared structurally with the same numeric tolerance. Both modes run all of a tool's
+tests in one container call.
+
+### 2.6 Models (pinned, not optimised)
 - **Generator:** `Qwen/Qwen3.8-27B` (~27.8B dense). May see the code as an *interface*
   reference, but the description is the specification.
 - **Judge:** `zai-org/GLM-5.3` (~743B MoE, ~39B active), a different family and a
@@ -91,7 +108,7 @@ Image: `toolvalidator-sandbox:py3.12` = `python:3.12-slim` (digest-pinned) + num
 - Model aliases (`alias-*`) are banned: the API reports the alias, not the model, so
   results would not be reproducible.
 
-### 2.6 Honesty rules baked into the code
+### 2.7 Honesty rules baked into the code
 - An **analyzer or harness failure raises**; it never becomes a verdict on the tool.
   bandit/mypy crashes, sandbox failures and unreadable LLM output are infrastructure
   errors, so they cannot silently inflate the rejection rate.
@@ -102,13 +119,21 @@ Image: `toolvalidator-sandbox:py3.12` = `python:3.12-slim` (digest-pinned) + num
 - Tests that need Docker, SCADS, or the dataset **skip with a visible reason** rather
   than passing vacuously.
 - An empty stage list is an error: a tool can never be accepted without being checked.
+- **Every LLM call is traced** (prompt id + version, requested vs served model, tokens,
+  latency, ok/error) and any recorded run can be **replayed offline**; a replay miss
+  raises rather than silently calling out. See [../LLM.md](../LLM.md).
+- **Prompts are versioned and generated into [../PROMPTS.md](../PROMPTS.md)**, with a test
+  that fails if the document and the code disagree.
 
 ---
 
 ## 3. Tests that have actually run
 
-**199 tests, all passing**, run as part of the gate before every commit. 22 of them are
-marked `slow` because they use real infrastructure rather than fakes.
+**257 tests, all passing**, run as part of the gate before every commit. 27 are marked
+`slow` because they use real infrastructure rather than fakes. In the 2026-09-23 session
+**Docker Desktop was down, so 22 of those skipped** (visibly, with the reason) — including
+the six new typed-mode tests, which means function-call execution is **not yet verified
+inside a container**.
 
 | Area | Tests | Of which real infrastructure |
 |---|---|---|

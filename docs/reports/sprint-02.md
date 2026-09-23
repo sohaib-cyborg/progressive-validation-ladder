@@ -137,3 +137,40 @@ run 3 (tolerance fractional): slip 1/200 = 0.005 · false-reject 4/200 = 0.020 �
 **Decisions:** DECISIONS.md entry to follow in the next docs commit; rule implemented in
 `stages/s4_execute.outputs_match`.
 **Commit:** `8861507` (tolerance + 10 s), `886a2cc` (tolerance only for fractional answers)
+
+---
+
+### Alignment + agent groundwork  (2026-09-23)
+**Status:** done (checkpoint). **Note:** six days passed with no commits (last was
+2026-09-18), so this is Day 7 of the 14-day plan with RQ3/RQ4/RQ5 still empty.
+**What was done:**
+- Read `docs/capability_request.md`. It describes a *different repository* (references
+  `src/`, `mcp_servers/`, `outputs/`, none of which exist here): the upstream
+  capability-gap project whose requests we consume.
+- Asked Sohaib four questions (schema shape, tool shape, upstream data, priorities) and
+  followed the answers: adopt the upstream schema, add the typed harness now, schema-only
+  alignment (no upstream data file yet), ignore the schedule.
+- **Adopted the upstream CapabilityRequest schema** across contracts, loader, generator
+  prompt, S3, the smoke example and every affected test.
+- **Split `s4_execute`** (238 lines) into stage logic + `harness.py` + `compare.py`
+  (pure refactor, separate commit), then **added typed function-call execution**.
+- Plan steps 0-3: pinned langgraph after verifying it, added call **tracing**, **offline
+  replay**, and the **prompt registry** with a generated `docs/PROMPTS.md`.
+- Wrote `docs/ARCHITECTURE.md`, `docs/LLM.md`, `docs/WORKFLOW.md` (with diagrams) and
+  refreshed `docs/reports/STATUS.md`.
+**Commands run + actual output:**
+```
+$ pip install "langgraph>=1.2,<2"; pip check   → No broken requirements found
+  (langgraph 1.2.11, langchain-core 1.6.3, langsmith 0.12.6, orjson, xxhash;
+   openai 3.14.1 and pydantic 2.13.5 unchanged)
+$ mypy --strict on a typed StateGraph probe    → Success: no issues found in 1 source file
+$ python -m toolvalidator.cli prompts --write  → wrote docs\PROMPTS.md
+$ <gate> → All checks passed! / Success: no issues found in 35 source files / 257 passed
+  Docker daemon DOWN this session: 22 slow tests skipped with the reason, including the
+  six new typed-mode tests → function mode is NOT yet verified in a container.
+```
+**Decisions:** DECISIONS.md 2026-09-23 (schema, typed mode, prompt registry).
+**Commits:** `bd29a99` langgraph · `5d6ff77` trace · `fb57cc8` replay ·
+`02b591f` schema · `d983994` split · `5a8c73c` typed mode · `15c9589` prompt registry
+**Open / next:** start Docker and run the 22 skipped tests (typed mode verification);
+then S5b rubber-duck, S6 score and the RQ3/RQ4 experiments.
