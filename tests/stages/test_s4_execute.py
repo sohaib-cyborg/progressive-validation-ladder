@@ -405,13 +405,25 @@ def test_real_typed_tool_printing_to_stdout_still_passes(sandbox: DockerSandbox)
 
 
 @pytest.mark.slow
-def test_real_typed_tool_missing_the_entrypoint_is_reported(sandbox: DockerSandbox) -> None:
+def test_real_typed_tool_with_an_ambiguous_module_reports_no_entrypoint(
+    sandbox: DockerSandbox,
+) -> None:
+    # Two public functions and neither is named in the request: we refuse to guess.
+    ambiguous = "def one(celsius):\n    return {}\n\n\ndef two(celsius):\n    return {}\n"
     record = ValidationRecord(request=_TYPED_REQUEST)
-    res = s4_execute.run(
-        _tool("def other(x):\n    return x\n"), record, sandbox, tests=_TYPED_TESTS
-    )
+    res = s4_execute.run(_tool(ambiguous), record, sandbox, tests=_TYPED_TESTS)
     assert not res.passed
     assert res.category == "no_entrypoint"
+
+
+@pytest.mark.slow
+def test_real_typed_tool_with_one_differently_named_function_is_still_called(
+    sandbox: DockerSandbox,
+) -> None:
+    # A synthesized tool may name its function differently; a single candidate is used.
+    renamed = "def convert(celsius):\n    return {'fahrenheit': celsius * 9 / 5 + 32}\n"
+    record = ValidationRecord(request=_TYPED_REQUEST)
+    assert s4_execute.run(_tool(renamed), record, sandbox, tests=_TYPED_TESTS).passed
 
 
 @pytest.mark.slow

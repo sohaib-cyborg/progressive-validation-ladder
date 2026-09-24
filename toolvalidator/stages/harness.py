@@ -1,5 +1,8 @@
 """Comparison rules and the in-sandbox harness text used by S4.
 
+Failure previews keep the START of stdout (what the tool printed first) and the END of
+stderr (where the exception type and message are); a traceback's head is boilerplate.
+
 Split out of ``s4_execute`` to keep both files under the size limit (CLAUDE.md §2).
 The harness injects the very functions tested here, so the rule has one definition.
 """
@@ -93,7 +96,7 @@ for index, case in enumerate(payload["tests"]):
     passed = not timed_out and code == 0 and matches
     results.append({
         "index": index, "passed": passed, "timed_out": timed_out, "exit_code": code,
-        "actual": "" if passed else actual[:preview], "stderr": "" if passed else stderr[:preview],
+        "actual": "" if passed else actual[:preview], "stderr": "" if passed else stderr[-preview:],
     })
 print(json.dumps({"results": results}))
 """
@@ -192,14 +195,15 @@ for index, case in enumerate(payload["tests"]):
             )
     results.append({
         "index": index, "passed": passed, "timed_out": timed_out, "exit_code": code,
-        "actual": "" if passed else raw[:preview], "stderr": "" if passed else stderr[:preview],
+        "actual": "" if passed else raw[:preview], "stderr": "" if passed else stderr[-preview:],
     })
 print(json.dumps({"results": results}))
 """
 
 FUNCTION_HARNESS = "\n".join(
     [
-        "import json, math, resource, subprocess, sys",
+        # `Any` is needed because values_match is injected with its annotations.
+        "import json, math, resource, subprocess, sys\nfrom typing import Any",
         inspect.getsource(values_match),
         FUNCTION_HARNESS_MAIN,
     ]
