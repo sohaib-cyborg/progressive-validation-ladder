@@ -12,6 +12,7 @@ from collections.abc import Sequence
 
 from toolvalidator.contracts import CapabilityRequest, IOExample
 from toolvalidator.llm.scads_client import ScadsClient, parse_json_object
+from toolvalidator.llm.trace import trace_context
 from toolvalidator.prompts.testgen import DEFAULT_TEST_COUNT, GENERATE_TESTS_V1
 from toolvalidator.testgen.schemas import GeneratedSuite
 
@@ -37,7 +38,8 @@ def generate_tests(
     examples: Sequence[IOExample] = (),
 ) -> GeneratedSuite:
     """Ask the generator for tests. Raises LLMError/LLMOutputError; never guesses."""
-    result = client.complete(
-        "generator", system=SPEC.system, user=build_user_prompt(request, code, n, examples)
-    )
+    with trace_context(prompt_id=SPEC.id, prompt_version=SPEC.version):
+        result = client.complete(
+            "generator", system=SPEC.system, user=build_user_prompt(request, code, n, examples)
+        )
     return GeneratedSuite.parse(parse_json_object(result.content))

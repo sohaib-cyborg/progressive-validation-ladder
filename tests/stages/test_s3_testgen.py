@@ -8,6 +8,7 @@ import pytest
 from tests.conftest import FakeSandbox
 from toolvalidator.contracts import ToolArtifact, ValidationRecord
 from toolvalidator.llm.scads_client import LLMOutputError, LLMResult
+from toolvalidator.llm.trace import current_context
 from toolvalidator.stages import s3_testgen
 
 TOOL = ToolArtifact(tool_id="t1", code="print(int(input()) + 1)")
@@ -94,3 +95,19 @@ def test_unusable_generator_output_raises(
     client = _ScriptedClient("sorry, no JSON here")
     with pytest.raises(LLMOutputError):
         s3_testgen.run(TOOL, record, fake_sandbox, client=client, n=1)
+
+
+def test_calls_are_traced_with_their_prompt_ids(
+    record: ValidationRecord, fake_sandbox: FakeSandbox
+) -> None:
+    seen: list[tuple[str | None, str | None]] = []
+
+    class _Spy(_ScriptedClient):
+        def complete(self, role: str, *, system: str, user: str) -> LLMResult:
+            context = current_context()
+            seen.append((context.prompt_id, context.prompt_version))
+            return super().complete(role, system=system, user=user)
+
+    generated = json.dumps({"tests": [{"input": "1", "output": "2"}]})
+    s3_testgen.run(TOOL, record, fake_sandbox, client=_Spy(generated, '{"valid": true}'), n=1)
+    assert seen == [("generate_tests", "v1"), ("judge_test", "v1")]
