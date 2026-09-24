@@ -213,3 +213,15 @@ Status (fill in after running):
 - `docs/HANDOFF.md` written: how to verify the environment, what exists, what to do next
   (S5b → S6 → RQ3/RQ4 experiments → Tier 1 run), and the decisions not to relitigate.
 - Still open: the agreed 25-test cap is **not implemented**; RQ3/RQ4/RQ5 have no results.
+
+### Day 8 cont. (2026-09-24) — S5b, S6 signals/model, 25-test cap, rate limits
+- Committed: S5b rubber-duck (+ `explain_code@v1`, `compare_explanation@v1`), S3 calls now
+  traced with prompt ids, client waits out HTTP 429, `scoring/signals.py` (pass rate only
+  from *generated* tests — leakage guard), `scoring/model.py` (grouped-CV LR + metrics,
+  synthetic tests only), 25-test cap in `experiments/common.py`. 296 tests, 0 skips.
+- **Gotcha: SCADS throttles GLM-5.3 at 3,000 tokens / ~60 s per key** (Qwen: 40,000). The
+  judge is the bottleneck for S3 and S5b; see LLM.md §6. Unresolved — needs Sohaib.
+- **Capped pilot: slip 0.5% → 9.5%** (18 rare-input bugs fail 1–3 of ~103 tests). Headline
+  choice (capped vs uncapped) is open.
+- Not done: S6 stage (verdict mapping = pipeline contract), RQ3/RQ4 runners, Tier 1 run.
+

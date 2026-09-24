@@ -437,3 +437,43 @@ from the code, and the report would quote something that never ran. Versioning a
 a prompt ablation (v1 vs v2) a real comparison instead of a re-run, and both ids are on
 every trace row.
 **Rule:** a released version is never edited; a change is a new object beside it.
+
+## 2026-09-24 — S5b rubber-duck: blind explainer, blind comparer, score in plain Python
+**Decision:** `explain_code@v1` (generator role) sees **only the code**, never the
+description; `compare_explanation@v1` (judge role) sees **only the request and the
+explanation**, never the code, and returns a per-requirement checklist
+(`met` / `violated` / `unknown`). The stage computes
+`semantics_score = met / (met + violated)`, `None` when nothing was decided, and records
+violated requirements as the repair signal. **S5b always passes.**
+**Why:** an explainer that saw the description would echo it back and the check would
+measure nothing. A comparer that saw the code would become a code reviewer, not a
+semantic check. S5b never fails a tool because CLAUDE.md rule 5 forbids an LLM deciding a
+verdict; S6 decides what the signal is worth.
+**Observed (one real run, n=2 tools):** a `min`-for-`max` bug scored 0.75, not 0,
+because three trivial requirements (input format etc.) were met. The ratio dilutes a
+central violation, so S6 also receives a binary `semantic_violation`, and the ablation
+decides which carries information.
+
+## 2026-09-24 — The agreed 25-test cap: a seeded sample per entry
+**Decision:** `experiments/common.cap_tests` keeps at most 25 tests per program: a sample
+seeded by `(seed, entry_id)`, kept in the original order. Buggy and fixed tools of one
+entry therefore face the **same** tests. `--max-tests 0` disables it. Outcomes record
+`n_tests` (run) and `n_tests_available`.
+**Why:** a program that times out on every one of ~100 tests costs up to 1,000 s. A sample,
+not the first 25, so the choice makes no assumption about how upstream ordered its tests.
+Keying by entry keeps the buggy-vs-fixed comparison paired. Measured on the valid split
+(670 problems): median 103 tests, max 132; **585 problems (87%) have more than 25**, so
+the cap changes the test set of most programs.
+**Consequence:** pilot numbers (uncapped) and capped numbers are both reported as a
+sensitivity check; fewer tests can only raise the slip rate and lower false rejections.
+
+## 2026-09-24 — S6 score inputs come from generated tests only
+**Decision:** `scoring/signals.collect_signals` takes `test_pass_rate` from S4 **only when
+S3 ran before it**. S4 on the dataset's own tests is ignored.
+**Why:** those tests are the ground truth the score is judged against (PLAN.md §5.1); in
+the pilot they separated 199/200 buggy tools. Using them as an input would make RQ4
+circular and say nothing about synthesized tools, which arrive with no tests.
+**Also:** missing signals are `None`, then `0 + <name>_missing` in the regression; a signal
+never observed (today: `mutation_score`, S5 unbuilt) is dropped and listed as dropped.
+Folds are grouped by `problem_id`. RunBugRun has no synthesis metadata, so that PLAN §5.2
+signal is absent, not imputed.

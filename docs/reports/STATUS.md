@@ -26,15 +26,15 @@ comes out with a verdict, ACCEPT or REJECT:
 | S3 test-gen | generator proposes tests, independent judge filters them | ✅ built (not yet run at scale) |
 | S4 execute | runs the tool against tests **inside the sandbox**, stdin *or* typed function call | ✅ built, both modes verified against real Docker |
 | S5 mutation | mutation testing, two arms | ❌ not built |
-| S5b rubber-duck | LLM explains the code; compare to the description | ❌ not built |
-| S6 score | reliability score fit from data | ❌ not built |
+| S5b rubber-duck | LLM explains the code (blind to the spec); a second LLM checks each requirement (blind to the code); score computed in Python | ✅ built; one real SCADS run on 2 toy tools, not yet on RunBugRun |
+| S6 score | signals from a record → grouped-CV logistic regression, AUC/ρ/Brier/calibration/ablation | 🟡 signals + model built, tested on synthetic data only; **no real fit yet**; no stage wiring |
 | S7 MCP schema | generate an MCP JSON schema | ❌ not built |
 
 Supporting parts that exist: the pipeline state machine, contracts, settings, the
 RunBugRun loader, the Docker sandbox (container + execution), the SCADS LLM client,
 repair signals, a CLI, and one experiment runner.
 
-**Size:** ~2,560 lines of library + loader + experiment code. 258 tests, 28 of them
+**Size:** ~2,560 lines of library + loader + experiment code as of Day 7, plus S5b and `scoring/` on Day 8. 296 tests, 29 of them
 against real infrastructure.
 *(That debt is paid: `s4_execute` was split into stage logic, `harness.py` and
 `compare.py`, all under the size limit.)*
@@ -129,7 +129,7 @@ tests in one container call.
 
 ## 3. Tests that have actually run
 
-**258 tests, all passing with zero skips** (2026-09-24, Docker up and SCADS reachable),
+**296 tests, all passing with zero skips** (2026-09-24 end of Day 8, Docker up and SCADS reachable),
 run as part of the gate before every commit. 28 are marked `slow` because they use real
 infrastructure rather than fakes.
 
@@ -186,6 +186,7 @@ come later.
 | **Static + execution**, run 1: exact text comparison, 5 s per-test timeout | 1/200 = 0.5% | 9/200 = 4.5% |
 | **Static + execution**, run 2: numeric tolerance everywhere, 10 s timeout | 5/200 = 2.5% | 4/200 = 2.0% |
 | **Static + execution**, run 3 (current rule): tolerance only for fractional answers, 10 s timeout | **1/200 = 0.5%** | **4/200 = 2.0%** |
+| **Static + execution**, run 3 rule **+ 25-test cap** (seeded sample per entry), 2026-09-24 | **19/200 = 9.5%** | 3/200 = 1.5% |
 
 The three rows differ **only** in the output-comparison rule and the per-test timeout;
 the tools, the sample and the tests are identical. The rule alone moves both rates by
@@ -199,6 +200,14 @@ RQ2 signal: these are logic bugs, and bandit and mypy are blind to them.
 Dynamic per-category recall under the current rule (run 3) is 1.00 in every category
 except `call` (0.99), including `type_conversion` (1.00), which run 2's over-broad
 tolerance had dropped to 0.50.
+
+**The 25-test cap is a large effect, not a detail (2026-09-24, same 200 entries, same seed,
+`results/pilot3_cap25`).** Slips rose from 1 to 19. All 18 new slips are buggy programs that
+failed only 1–3 of ~103 tests uncapped (pass rates 0.89–0.99): rare-input bugs whose failing
+tests were not among the 25 sampled. One fixed program flipped the other way (398834), and
+`unusable_fixed` fell from 4 to 3. Capped recall drops to 0.78–0.90 in most categories
+(`variable_access` 0.78, `identifier`/`literal` 0.82). Cost fell from 2.16 to 1.33 s/tool.
+Both are reported; which one is the headline is an open decision (HANDOFF §3).
 
 **Run 3 is the configuration to quote.** Its 4 remaining false rejections are 3 correct
 programs still too slow for a 10 s per-test limit (pass rates 0.73, 0.98, 0.98) and 1
@@ -243,7 +252,8 @@ This is why the experiment reports that count alongside every rate.
 
 ## 5. Not built yet
 
-- **S5 mutation testing** (both arms), **S5b rubber-duck**, **S6 score**, **S7 MCP schema**.
+- **S5 mutation testing** (both arms), **S7 MCP schema**, and the S6 *stage* (the verdict
+  mapping needs a pipeline-contract decision). S5b and the S6 signals/model exist.
 - **Four of five experiment scripts:** test-generation strategies (RQ3), the score fit
   (RQ4), MCP accuracy (RQ5), the optional judge study.
 - RQ3, RQ4 and RQ5 therefore have **no results at all** yet.

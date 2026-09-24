@@ -99,6 +99,25 @@ Measured so far (2026-09-17, one trivial call per role): generator ≈ 1.5 s, ju
 The same pair took 53 s on a cold first call, so **SCADS latency varies by an order of
 magnitude** and per-prompt cost must be measured on real prompts, not extrapolated.
 
+**Rate limits (measured 2026-09-24 from `x-ratelimit-model_per_key-*` headers, this key).**
+The window is ~60 s, inferred from the reset times in 429 replies; SCADS does not document it.
+
+| Model | Requests / window | Tokens / window |
+|---|---|---|
+| `Qwen/Qwen3.8-27B` (generator) | 120 | 40,000 |
+| `zai-org/GLM-5.3` (judge) | **30** | **3,000** |
+| `zai-org/GLM-5.3-Flash` | 60 | 10,000 |
+| `deepseek-ai/DeepSeek-V4.1-Flash` | 60 | 10,000 |
+| `meta-llama/Llama-3.3-70B-Instruct` | 250 | 12,000 |
+| `google/gemma-4-26B-A4B-it` | 120 | 60,000 |
+| `openai/gpt-oss-120b` | 20 | 4,000 |
+
+Measured per call on a toy task (n=1 each): S3 judge 278 tokens (3.7 s); S5b compare
+1,015 tokens (45.5 s); S5b explain 486 tokens (2.5 s). Real CodeNet statements are ~10x
+longer (median 1,063 chars), so real calls are larger. **The judge's 3,000-token window is
+the binding constraint for every LLM experiment.** The client now waits for the stated
+reset on HTTP 429 (bounded, logged; `rate_limit_waits`, `max_rate_limit_wait_s`).
+
 SCADS publishes no price, so cost is reported in **tokens and wall-clock**. No monetary
 figure appears anywhere; inventing one would breach CLAUDE.md rule 7.
 
