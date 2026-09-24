@@ -174,3 +174,27 @@ $ <gate> → All checks passed! / Success: no issues found in 35 source files / 
 `02b591f` schema · `d983994` split · `5a8c73c` typed mode · `15c9589` prompt registry
 **Open / next:** start Docker and run the 22 skipped tests (typed mode verification);
 then S5b rubber-duck, S6 score and the RQ3/RQ4 experiments.
+
+---
+
+### Typed mode verified in a container  (2026-09-24)
+**Status:** done
+**What was done:** Docker was started, so the 22 previously skipped tests ran. Two real
+defects surfaced immediately in function mode, plus one wrong test of mine.
+**Commands run + actual output:**
+```
+$ pytest -q -m slow            (first run, Docker up)
+HarnessError: harness exited 1: NameError: name 'Any' is not defined
+  → the injected values_match source carries annotations; harness needed `from typing import Any`.
+    Function mode was broken on EVERY call and the fake-sandbox unit tests could not see it.
+$ pytest -q -m slow            (second run)
+assert 'ValueError' in ... → stderr preview kept the traceback HEAD, hiding the exception type
+  → previews now keep the tail of stderr, the head of stdout.
+assert 'crash' == 'no_entrypoint' → my test was wrong: a module with ONE public function is
+  used even under a different name (deliberate fallback). Test now uses an ambiguous module,
+  plus a new test documenting the fallback.
+$ <gate> → All checks passed! / Success: no issues found in 35 source files / 258 passed
+$ docker ps -a --filter label=toolvalidator=sandbox → leftover containers: 0
+```
+**Commit:** `b919d5f stages: fix typed harness in-container failures found by real Docker runs`
+**Lesson for the report:** a sandbox harness cannot be validated with a fake sandbox.

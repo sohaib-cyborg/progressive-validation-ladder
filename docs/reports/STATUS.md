@@ -1,6 +1,6 @@
 # Project D — Status Report
 
-**As of:** 2026-09-23 (Day 7 of the 14-day plan) · **Branch:** main · **Gate:** green
+**As of:** 2026-09-24 (Day 8 of the 14-day plan) · **Branch:** main · **Gate:** green
 (`ruff format . && ruff check . && mypy --strict toolvalidator data experiments && pytest -q`)
 
 A snapshot of what exists, how it works, what has actually been run, and what the
@@ -24,7 +24,7 @@ comes out with a verdict, ACCEPT or REJECT:
 | S1 parse | `ast.parse`; syntax errors and parser overflow → REJECT | ✅ built |
 | S2 static | bandit (dangerous calls, hard gate) + mypy (type errors, soft signal) | ✅ built |
 | S3 test-gen | generator proposes tests, independent judge filters them | ✅ built (not yet run at scale) |
-| S4 execute | runs the tool against tests **inside the sandbox**, stdin *or* typed function call | ✅ built (typed mode unverified in a container) |
+| S4 execute | runs the tool against tests **inside the sandbox**, stdin *or* typed function call | ✅ built, both modes verified against real Docker |
 | S5 mutation | mutation testing, two arms | ❌ not built |
 | S5b rubber-duck | LLM explains the code; compare to the description | ❌ not built |
 | S6 score | reliability score fit from data | ❌ not built |
@@ -34,7 +34,7 @@ Supporting parts that exist: the pipeline state machine, contracts, settings, th
 RunBugRun loader, the Docker sandbox (container + execution), the SCADS LLM client,
 repair signals, a CLI, and one experiment runner.
 
-**Size:** 2,555 lines of library + loader + experiment code. 257 tests, 27 of them
+**Size:** ~2,560 lines of library + loader + experiment code. 258 tests, 28 of them
 against real infrastructure.
 *(That debt is paid: `s4_execute` was split into stage logic, `harness.py` and
 `compare.py`, all under the size limit.)*
@@ -129,11 +129,14 @@ tests in one container call.
 
 ## 3. Tests that have actually run
 
-**257 tests, all passing**, run as part of the gate before every commit. 27 are marked
-`slow` because they use real infrastructure rather than fakes. In the 2026-09-23 session
-**Docker Desktop was down, so 22 of those skipped** (visibly, with the reason) — including
-the six new typed-mode tests, which means function-call execution is **not yet verified
-inside a container**.
+**258 tests, all passing with zero skips** (2026-09-24, Docker up and SCADS reachable),
+run as part of the gate before every commit. 28 are marked `slow` because they use real
+infrastructure rather than fakes.
+
+Running the typed-mode tests in a real container found two defects that unit tests with a
+fake sandbox could not: the injected comparison function needed `from typing import Any`,
+without which **function mode raised NameError on every call**, and failure previews kept
+the head of stderr instead of the tail, hiding the exception type. Both fixed in `b919d5f`.
 
 | Area | Tests | Of which real infrastructure |
 |---|---|---|

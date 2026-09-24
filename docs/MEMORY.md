@@ -203,3 +203,13 @@ Status (fill in after running):
   **prompt registry** + generated `docs/PROMPTS.md`. New docs: ARCHITECTURE, LLM, WORKFLOW.
 - 257 tests green (22 skipped, Docker off). Schedule: Day 7 of 14, RQ3/RQ4/RQ5 still empty.
 - Next: start Docker → run the skipped tests; then S5b, S6 and the RQ3/RQ4 experiments.
+
+### Day 8 (2026-09-24) — typed mode verified; handoff prepared
+- Docker up: ran the 22 skipped tests. Function mode was **broken in-container** (missing
+  `from typing import Any` in the injected harness source) and stderr previews hid the
+  exception type. Both fixed; a wrong no_entrypoint test corrected. **258 tests, 0 skips.**
+- Gotcha worth keeping: **a fake sandbox cannot validate a sandbox harness.** Always run
+  `pytest -m slow` with Docker up before believing an execution feature works.
+- `docs/HANDOFF.md` written: how to verify the environment, what exists, what to do next
+  (S5b → S6 → RQ3/RQ4 experiments → Tier 1 run), and the decisions not to relitigate.
+- Still open: the agreed 25-test cap is **not implemented**; RQ3/RQ4/RQ5 have no results.
