@@ -71,7 +71,8 @@ toolvalidator/                     # ← repo root
 │   ├── prompts/                   # versioned prompt registry (docs/PROMPTS.md is generated)
 │   │   ├── __init__.py            # REGISTRY + lookup + markdown_catalogue
 │   │   ├── spec.py                # PromptSpec + the docs renderer
-│   │   └── testgen.py             # generate_tests@v1, judge_test@v1
+│   │   ├── testgen.py             # generate_tests@v1, judge_test@v1
+│   │   └── rubberduck.py          # explain_code@v1, compare_explanation@v1 (S5b)
 │   │
 │   ├── llm/                       # SCADS client (the only place network-to-LLM lives)
 │   │   ├── __init__.py

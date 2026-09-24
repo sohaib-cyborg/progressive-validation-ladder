@@ -60,6 +60,24 @@ def test_judge_prompt_renders_one_case_and_never_the_code() -> None:
     assert "Program source" not in rendered
 
 
+def test_explain_prompt_shows_the_code_and_never_the_description() -> None:
+    explain = spec("explain_code", "v1")
+    assert explain.role == "generator"
+    rendered = explain.render(code="print(sum(map(int, input().split())))")
+    assert "print(sum(map(int" in rendered
+    assert REQUEST.description not in rendered
+
+
+def test_compare_prompt_shows_description_and_explanation_never_the_code() -> None:
+    compare = spec("compare_explanation", "v1")
+    assert compare.role == "judge"
+    rendered = compare.render(request=REQUEST, explanation="It prints the product of two ints.")
+    assert REQUEST.description in rendered
+    assert "It prints the product of two ints." in rendered
+    assert "stdout: string" in rendered  # declared outputs are part of the spec
+    assert "Program source" not in rendered and "```python" not in rendered
+
+
 def test_markdown_catalogue_quotes_every_registered_prompt() -> None:
     text = markdown_catalogue()
     for value in REGISTRY.values():

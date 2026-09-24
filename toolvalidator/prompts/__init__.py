@@ -9,12 +9,13 @@ comparison would be a lie.
 --write``) and a test fails if the two drift, so the reviewed text is the text that runs.
 """
 
+from toolvalidator.prompts.rubberduck import COMPARE_EXPLANATION_V1, EXPLAIN_CODE_V1
 from toolvalidator.prompts.spec import PromptSpec, register, render_catalogue
 from toolvalidator.prompts.testgen import GENERATE_TESTS_V1, JUDGE_TEST_V1
 
 __all__ = ["REGISTRY", "PromptSpec", "markdown_catalogue", "spec"]
 
-REGISTRY = register(GENERATE_TESTS_V1, JUDGE_TEST_V1)
+REGISTRY = register(GENERATE_TESTS_V1, JUDGE_TEST_V1, EXPLAIN_CODE_V1, COMPARE_EXPLANATION_V1)
 
 
 def spec(prompt_id: str, version: str) -> PromptSpec:
