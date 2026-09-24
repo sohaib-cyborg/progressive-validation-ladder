@@ -63,9 +63,9 @@ def render_generate(
         request.description.strip(),
     ]
     if request.inputs:
-        parts += ["", "Declared inputs:", *(f"- {_param(p)}" for p in request.inputs)]
+        parts += ["", "Declared inputs:", *(f"- {describe_param(p)}" for p in request.inputs)]
     if request.outputs:
-        parts += ["", "Declared outputs:", *(f"- {_param(p)}" for p in request.outputs)]
+        parts += ["", "Declared outputs:", *(f"- {describe_param(p)}" for p in request.outputs)]
     if request.rationale:
         parts += ["", f"Why the tool is needed: {request.rationale.strip()}"]
     if examples:
@@ -83,7 +83,7 @@ def render_generate(
     return "\n".join(parts)
 
 
-def _param(spec: ParamSpec) -> str:
+def describe_param(spec: ParamSpec) -> str:
     optional = "" if spec.required else " (optional)"
     description = f" — {spec.description}" if spec.description else ""
     return f"{spec.name}: {spec.type}{optional}{description}"
