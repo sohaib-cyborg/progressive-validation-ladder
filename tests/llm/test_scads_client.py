@@ -1,8 +1,11 @@
 """Tests for the SCADS LLM client (toolvalidator/llm/scads_client.py)."""
 
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 
+import httpx
+import openai
 import pytest
 from pydantic import SecretStr
 
@@ -128,3 +131,68 @@ def test_real_generator_and_judge_calls() -> None:
         result = client.complete(role, system="Answer tersely.", user="Reply with exactly: OK")  # type: ignore[arg-type]
         assert "OK" in result.content
         assert result.model
+
+
+# --- rate limits -------------------------------------------------------------------
+
+_NOW = datetime(2026, 9, 24, 18, 34, 0, tzinfo=UTC)
+
+
+def _rate_limited(reset: str = "2026-09-24 18:34:40 UTC") -> openai.RateLimitError:
+    message = f"Rate limit exceeded ... Limit type: tokens. Limit resets at: {reset}"
+    request = httpx.Request("POST", "https://llm.example/v1/chat/completions")
+    return openai.RateLimitError(message, response=httpx.Response(429, request=request), body=None)
+
+
+class _Throttled(_FakeCompletions):
+    def __init__(self, failures: list[Exception], response: Any) -> None:
+        super().__init__(response)
+        self.failures = failures
+
+    def create(self, **kwargs: Any) -> Any:
+        self.calls.append(kwargs)
+        if self.failures:
+            raise self.failures.pop(0)
+        return self.response
+
+
+def _throttled_client(
+    failures: list[Exception], **settings: Any
+) -> tuple[ScadsClient, list[float]]:
+    completions = _Throttled(failures, _response("ok"))
+    fake = SimpleNamespace(chat=SimpleNamespace(completions=completions))
+    waits: list[float] = []
+    client = ScadsClient(
+        SETTINGS.model_copy(update=settings),
+        openai_client=fake,
+        sleep=waits.append,
+        clock=lambda: _NOW,
+    )
+    return client, waits
+
+
+def test_rate_limit_waits_until_the_stated_reset_then_retries() -> None:
+    client, waits = _throttled_client([_rate_limited(), _rate_limited()])
+    assert client.complete("judge", system="s", user="u").content == "ok"
+    assert waits == [41.0, 41.0]  # 40 s to the reset, plus a 1 s margin
+
+
+def test_rate_limit_without_a_reset_time_waits_the_fallback() -> None:
+    client, waits = _throttled_client([_rate_limited(reset="soon")])
+    client.complete("judge", system="s", user="u")
+    assert waits == [60.0]
+
+
+def test_rate_limit_wait_is_capped() -> None:
+    client, waits = _throttled_client(
+        [_rate_limited(reset="2026-09-24 20:00:00 UTC")], max_rate_limit_wait_s=90.0
+    )
+    client.complete("judge", system="s", user="u")
+    assert waits == [90.0]
+
+
+def test_rate_limit_gives_up_after_the_configured_waits() -> None:
+    client, waits = _throttled_client([_rate_limited()] * 3, rate_limit_waits=2)
+    with pytest.raises(LLMError, match="rate limit"):
+        client.complete("judge", system="s", user="u")
+    assert len(waits) == 2

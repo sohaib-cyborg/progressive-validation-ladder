@@ -6,10 +6,13 @@ LLM output is untrusted input (CLAUDE.md §7): callers parse it with
 
 import json
 import re
+import sys
 import time
+from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Any, Literal
 
-from openai import APIError, OpenAI
+from openai import APIError, OpenAI, RateLimitError
 from openai.types.chat import ChatCompletionMessageParam
 from pydantic import BaseModel, ConfigDict, JsonValue, TypeAdapter, ValidationError
 
@@ -19,6 +22,9 @@ type Role = Literal["generator", "judge"]
 
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.S | re.I)
 _OBJECT = TypeAdapter(dict[str, JsonValue])
+_RESET = re.compile(r"resets at: (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) UTC")
+FALLBACK_RATE_LIMIT_WAIT_S = 60.0  # the observed SCADS window when no reset is stated
+RATE_LIMIT_MARGIN_S = 1.0
 
 
 class LLMError(RuntimeError):
@@ -42,10 +48,19 @@ class LLMResult(BaseModel):
 
 class ScadsClient:
     # Any: tests inject a fake with the same ``chat.completions.create`` shape.
-    def __init__(self, settings: LLMSettings, *, openai_client: Any | None = None) -> None:
+    def __init__(
+        self,
+        settings: LLMSettings,
+        *,
+        openai_client: Any | None = None,
+        sleep: Callable[[float], None] = time.sleep,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
         if settings.api_key is None:
             raise LLMError("SCADS_API_KEY is not set")
         self._settings = settings
+        self._sleep = sleep
+        self._clock = clock
         self._client = openai_client or OpenAI(
             base_url=settings.base_url,
             api_key=settings.api_key.get_secret_value(),
@@ -60,13 +75,8 @@ class ScadsClient:
             {"role": "user", "content": user},
         ]
         start = time.perf_counter()
-        try:
-            response = self._client.chat.completions.create(
-                model=model, messages=messages, temperature=0.0
-            )
-        except APIError as exc:
-            raise LLMError(f"{role} call to {model} failed: {exc}") from exc
-        latency = time.perf_counter() - start
+        response = self._create(role, model, messages)
+        latency = time.perf_counter() - start  # includes any rate-limit waits
         message = response.choices[0].message if response.choices else None
         content = message.content if message is not None else None
         if not isinstance(content, str):
@@ -80,6 +90,33 @@ class ScadsClient:
             completion_tokens=getattr(usage, "completion_tokens", None),
             latency_s=latency,
         )
+
+    def _create(self, role: Role, model: str, messages: list[ChatCompletionMessageParam]) -> Any:
+        """One completion, waiting out HTTP 429s (never counted as a model answer)."""
+        waits = 0
+        while True:
+            try:
+                return self._client.chat.completions.create(
+                    model=model, messages=messages, temperature=0.0
+                )
+            except RateLimitError as exc:
+                if waits >= self._settings.rate_limit_waits:
+                    raise LLMError(f"{role} call to {model}: rate limit persisted: {exc}") from exc
+                waits += 1
+                delay = self._rate_limit_delay(str(exc))
+                print(f"[scads] {model} rate-limited, waiting {delay:.0f}s", file=sys.stderr)
+                self._sleep(delay)
+            except APIError as exc:
+                raise LLMError(f"{role} call to {model} failed: {exc}") from exc
+
+    def _rate_limit_delay(self, message: str) -> float:
+        found = _RESET.search(message)
+        if found is None:
+            delay = FALLBACK_RATE_LIMIT_WAIT_S
+        else:
+            reset = datetime.strptime(found.group(1), "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
+            delay = (reset - self._clock()).total_seconds() + RATE_LIMIT_MARGIN_S
+        return min(max(delay, RATE_LIMIT_MARGIN_S), self._settings.max_rate_limit_wait_s)
 
     def model_for(self, role: Role) -> str:
         """The pinned model id for a role. Public so tracing can record what we asked for."""

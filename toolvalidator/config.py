@@ -30,6 +30,10 @@ class LLMSettings(_Frozen):
     # Reasoning models (the judge) can take minutes on long prompts.
     timeout_s: float = Field(default=300.0, gt=0)
     max_retries: int = Field(default=3, ge=0)
+    # SCADS throttles per key and model (judge: 3,000 tokens per ~60 s window, measured
+    # 2026-09-24). On HTTP 429 the client waits for the stated reset, this many times.
+    rate_limit_waits: int = Field(default=10, ge=0)
+    max_rate_limit_wait_s: float = Field(default=120.0, gt=0)
 
     @model_validator(mode="after")
     def _judge_is_independent(self) -> Self:
