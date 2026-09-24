@@ -8,6 +8,7 @@ import pytest
 from data.loaders.runbugrun import RunBugRunEntry
 from experiments.common import (
     ToolOutcome,
+    cap_tests,
     evaluate_tool,
     sample_entries,
     summarize,
@@ -113,6 +114,52 @@ def test_evaluate_syntax_error_is_rejected_by_static_without_executing() -> None
     assert outcome.category_static == "syntax_error"
     assert outcome.verdict_dynamic == "REJECT"
     assert sandbox.calls == []  # short-circuited before S4
+
+
+# --- test cap --------------------------------------------------------------------
+
+
+def _numbered(n: int) -> list[IOExample]:
+    return [IOExample(input=str(i), output=str(i)) for i in range(n)]
+
+
+def test_cap_keeps_small_suites_whole() -> None:
+    tests = _numbered(25)
+    assert cap_tests(tests, 25, seed=1, key=9) == tests
+    assert cap_tests(tests, None, seed=1, key=9) == tests
+
+
+def test_cap_is_a_seeded_subset_in_original_order() -> None:
+    tests = _numbered(100)
+    first = cap_tests(tests, 25, seed=1, key=9)
+    assert len(first) == 25
+    assert first == cap_tests(tests, 25, seed=1, key=9)  # deterministic
+    assert first != cap_tests(tests, 25, seed=1, key=10)  # differs per entry
+    positions = [tests.index(t) for t in first]
+    assert positions == sorted(positions)  # original order kept
+    assert first != tests[:25]  # a sample, not the head of the file
+
+
+def test_cap_must_be_positive() -> None:
+    with pytest.raises(ValueError, match="positive"):
+        cap_tests(_numbered(3), 0, seed=1, key=1)
+
+
+def test_evaluate_tool_runs_only_the_capped_tests_and_records_both_counts() -> None:
+    entry = _entry(5).model_copy(update={"tests": _numbered(40)})
+    sandbox = _sandbox(True)
+    outcome = evaluate_tool(entry, "fixed", sandbox, Settings(), max_tests=25, seed=3)
+    (_, stdin, _), *_ = sandbox.calls
+    assert len(json.loads(stdin)["tests"]) == 25
+    assert (outcome.n_tests, outcome.n_tests_available) == (25, 40)
+
+
+def test_both_variants_of_an_entry_get_the_same_capped_tests() -> None:
+    entry = _entry(6).model_copy(update={"tests": _numbered(60)})
+    buggy, fixed = _sandbox(False), _sandbox(True)
+    evaluate_tool(entry, "buggy", buggy, Settings(), max_tests=25, seed=3)
+    evaluate_tool(entry, "fixed", fixed, Settings(), max_tests=25, seed=3)
+    assert json.loads(buggy.calls[0][1])["tests"] == json.loads(fixed.calls[0][1])["tests"]
 
 
 # --- output ---------------------------------------------------------------------

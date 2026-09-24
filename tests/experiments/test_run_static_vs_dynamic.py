@@ -37,4 +37,6 @@ def test_end_to_end_on_two_entries(tmp_path: Path, sandbox_image: str) -> None:
     assert summary["n_tools"] == 4
     assert summary["n_errors"] == 0
     assert summary["seed"] == 20260917
+    assert summary["max_tests"] == 25  # the agreed per-program cap is the default
+    assert all(row["n_tests"] == min(25, row["n_tests_available"]) for row in rows)
     assert 0.0 <= summary["dynamic"]["slip_rate"] <= 1.0

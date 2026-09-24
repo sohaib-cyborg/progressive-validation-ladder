@@ -16,7 +16,14 @@ from pydantic import BaseModel, ConfigDict, JsonValue
 
 from data.loaders.runbugrun import RunBugRunEntry, Split, iter_entries
 from toolvalidator.config import Settings
-from toolvalidator.contracts import Sandbox, Stage, ToolArtifact, ValidationRecord, Verdict
+from toolvalidator.contracts import (
+    IOExample,
+    Sandbox,
+    Stage,
+    ToolArtifact,
+    ValidationRecord,
+    Verdict,
+)
 from toolvalidator.pipeline import run_pipeline, static_stages
 from toolvalidator.sandbox.exec import NoExecutionSandbox
 from toolvalidator.stages import s4_execute
@@ -25,6 +32,7 @@ type Variant = Literal["buggy", "fixed"]
 
 CONFIG_STATIC = "static"
 CONFIG_DYNAMIC = "static+exec"
+DEFAULT_MAX_TESTS = 25  # agreed per-program cap (docs/DECISIONS.md)
 
 
 class ToolOutcome(BaseModel):
@@ -38,6 +46,7 @@ class ToolOutcome(BaseModel):
     variant: Variant
     is_correct: bool
     n_tests: int
+    n_tests_available: int | None = None  # None in runs from before the cap existed
     bug_labels: list[str]
     verdict_static: str
     category_static: str | None
@@ -71,17 +80,40 @@ def sample_entries(
     return chosen
 
 
+def cap_tests(
+    tests: Sequence[IOExample], cap: int | None, *, seed: int, key: int
+) -> list[IOExample]:
+    """At most ``cap`` tests: a seeded sample per ``key``, in the original order.
+
+    Keyed by entry, not by variant, so an entry's buggy and fixed tools face the same
+    tests. ``None`` means no cap.
+    """
+    if cap is not None and cap < 1:
+        raise ValueError(f"test cap must be positive, got {cap}")
+    if cap is None or len(tests) <= cap:
+        return list(tests)
+    chosen = sorted(random.Random(f"{seed}:{key}").sample(range(len(tests)), cap))
+    return [tests[i] for i in chosen]
+
+
 def evaluate_tool(
-    entry: RunBugRunEntry, variant: Variant, sandbox: Sandbox, settings: Settings
+    entry: RunBugRunEntry,
+    variant: Variant,
+    sandbox: Sandbox,
+    settings: Settings,
+    *,
+    max_tests: int | None = None,
+    seed: int = 0,
 ) -> ToolOutcome:
     """Run both configurations on one variant. The dataset's own tests are the oracle."""
+    tests = cap_tests(entry.tests, max_tests, seed=seed, key=entry.entry_id)
     code = entry.fixed_code if variant == "fixed" else entry.buggy_code
     artifact = ToolArtifact(tool_id=f"{entry.entry_id}-{variant}", code=code)
     static = static_stages(settings)
     static_record = run_pipeline(artifact, entry.request, static, NoExecutionSandbox())
     execute = partial(
         s4_execute.run,
-        tests=entry.tests,
+        tests=tests,
         timeout_s=settings.execution.test_timeout_s,
         rel_tol=settings.execution.float_rel_tol,
         abs_tol=settings.execution.float_abs_tol,
@@ -96,7 +128,8 @@ def evaluate_tool(
         split=entry.split,
         variant=variant,
         is_correct=variant == "fixed",
-        n_tests=len(entry.tests),
+        n_tests=len(tests),
+        n_tests_available=len(entry.tests),
         bug_labels=entry.bug_labels,
         verdict_static=_verdict(static_record.verdict),
         category_static=_category(static_record),

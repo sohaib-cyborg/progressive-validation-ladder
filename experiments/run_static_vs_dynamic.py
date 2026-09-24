@@ -19,6 +19,7 @@ import docker
 
 from data.loaders.runbugrun import RunBugRunEntry
 from experiments.common import (
+    DEFAULT_MAX_TESTS,
     ToolOutcome,
     default_workers,
     evaluate_tool,
@@ -40,14 +41,18 @@ def _docker_client(settings: Settings) -> Any:
     return _client
 
 
-def evaluate_entry(entry: RunBugRunEntry, settings: Settings) -> list[ToolOutcome]:
+def evaluate_entry(
+    entry: RunBugRunEntry, settings: Settings, max_tests: int | None, seed: int
+) -> list[ToolOutcome]:
     """Both variants of one entry, each in its own fresh container (docs/DECISIONS.md)."""
     client = _docker_client(settings)
     outcomes = []
     for variant in ("buggy", "fixed"):
         with provision(client, settings.sandbox) as container:
             sandbox = DockerSandbox(container, settings.sandbox)
-            outcomes.append(evaluate_tool(entry, variant, sandbox, settings))
+            outcomes.append(
+                evaluate_tool(entry, variant, sandbox, settings, max_tests=max_tests, seed=seed)
+            )
     return outcomes
 
 
@@ -59,10 +64,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--seed", type=int, default=20260917)
     parser.add_argument("--max-per-problem", type=int, default=2)
     parser.add_argument("--splits", nargs="+", default=["valid", "test"])
+    parser.add_argument(
+        "--max-tests", type=int, default=DEFAULT_MAX_TESTS, help="tests per program, 0 = all"
+    )
     parser.add_argument("--workers", type=int, default=0, help="0 = auto")
     args = parser.parse_args(argv)
 
     settings = load_settings()
+    max_tests = args.max_tests or None
     entries = sample_entries(
         args.raw_dir,
         splits=args.splits,
@@ -78,7 +87,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     outcomes: list[ToolOutcome] = []
     errors: list[dict[str, str]] = []
     with ProcessPoolExecutor(max_workers=workers) as pool:
-        futures = {pool.submit(evaluate_entry, entry, settings): entry for entry in entries}
+        futures = {
+            pool.submit(evaluate_entry, entry, settings, max_tests, args.seed): entry
+            for entry in entries
+        }
         for done, future in enumerate(as_completed(futures), start=1):
             entry = futures[future]
             try:
@@ -101,6 +113,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "seed": args.seed,
         "splits": list(args.splits),
         "max_per_problem": args.max_per_problem,
+        "max_tests": max_tests,
         "workers": workers,
         "wall_clock_s": round(elapsed, 1),
         "seconds_per_tool": round(elapsed / len(outcomes), 3),
