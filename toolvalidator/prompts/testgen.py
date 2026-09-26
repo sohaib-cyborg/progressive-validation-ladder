@@ -1,4 +1,4 @@
-"""The test-generation prompts: propose test cases, then judge one.
+"""The test-generation prompts: propose test cases, then judge them (one by one or batched).
 
 Moved here verbatim from ``testgen/generator.py`` and ``testgen/judge.py`` so every
 prompt carries a version and appears in ``docs/PROMPTS.md``. Those modules now
@@ -42,6 +42,21 @@ Answer with JSON only:
 
 Say false if the expected output is wrong, if the input is malformed for this task,
 or if the description does not determine the answer."""
+
+
+JUDGE_BATCH_SYSTEM = """You review proposed tests for a command-line program.
+
+You are given a task description and a numbered list of candidate tests. Each test is an
+exact stdin input and the expected stdout its author claims is correct. For EVERY test,
+decide whether that expected output is what a correct program would print for that
+input, according to the description alone. You never see the program's code. Judge each
+test on its own; one wrong test says nothing about the others.
+
+Answer with JSON only, one entry per test, using the test's number as "index":
+{"verdicts": [{"index": 0, "valid": true|false, "reason": "<one short sentence>"}]}
+
+Say false if the expected output is wrong, if the input is malformed for this task, or
+if the description does not determine the answer."""
 
 
 def render_generate(
@@ -116,6 +131,16 @@ GENERATE_TESTS_V1 = PromptSpec(
     renderer=render_generate,
 )
 
+
+def render_judge_batch(request: CapabilityRequest, tests: Sequence[GeneratedTest]) -> str:
+    parts = [f"Task name: {request.name}", "", "Task description:", request.description.strip()]
+    for index, test in enumerate(tests):
+        parts += ["", f"Test {index}:", f"input: {test.input!r}"]
+        parts += [f"expected output: {test.output!r}"]
+    parts += ["", f"Judge all {len(tests)} tests. Answer with JSON."]
+    return "\n".join(parts)
+
+
 JUDGE_TEST_V1 = PromptSpec(
     id="judge_test",
     version="v1",
@@ -124,4 +149,14 @@ JUDGE_TEST_V1 = PromptSpec(
     changelog="First version: one test per call; the judge never sees the tool's code.",
     system=JUDGE_SYSTEM,
     renderer=render_judge,
+)
+
+JUDGE_BATCH_V1 = PromptSpec(
+    id="judge_batch",
+    version="v1",
+    role="judge",
+    purpose="Judge a whole generated suite in one call (one verdict per numbered test).",
+    changelog="First version: judge_test@v1's criteria, batched to fit the judge's token budget.",
+    system=JUDGE_BATCH_SYSTEM,
+    renderer=render_judge_batch,
 )

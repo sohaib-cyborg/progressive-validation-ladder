@@ -14,6 +14,7 @@ Which model a role maps to, and every other LLM setting, is in `docs/LLM.md`.
 | `compare_explanation@v1` | judge | Check each requirement of the request against the explanation of the code. |
 | `explain_code@v1` | generator | Explain what a tool's code actually does, without being told what it should do. |
 | `generate_tests@v1` | generator | Propose black-box test cases for a requested tool, from the request alone. |
+| `judge_batch@v1` | judge | Judge a whole generated suite in one call (one verdict per numbered test). |
 | `judge_test@v1` | judge | Decide whether one candidate test's expected output follows from the request. |
 
 ---
@@ -99,6 +100,32 @@ Rules:
 - Cover normal cases and edge cases (smallest input, boundaries, ties).
 - Only include a case whose expected output you are certain of.
 - No prose outside the JSON.
+```
+
+---
+
+## `judge_batch@v1`
+
+- **Role:** judge
+- **Purpose:** Judge a whole generated suite in one call (one verdict per numbered test).
+- **This version:** First version: judge_test@v1's criteria, batched to fit the judge's token budget.
+
+### System prompt
+
+```text
+You review proposed tests for a command-line program.
+
+You are given a task description and a numbered list of candidate tests. Each test is an
+exact stdin input and the expected stdout its author claims is correct. For EVERY test,
+decide whether that expected output is what a correct program would print for that
+input, according to the description alone. You never see the program's code. Judge each
+test on its own; one wrong test says nothing about the others.
+
+Answer with JSON only, one entry per test, using the test's number as "index":
+{"verdicts": [{"index": 0, "valid": true|false, "reason": "<one short sentence>"}]}
+
+Say false if the expected output is wrong, if the input is malformed for this task, or
+if the description does not determine the answer.
 ```
 
 ---

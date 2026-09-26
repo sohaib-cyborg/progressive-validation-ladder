@@ -13,8 +13,8 @@ from collections.abc import Sequence
 from toolvalidator.contracts import CapabilityRequest
 from toolvalidator.llm.scads_client import ScadsClient, parse_json_object
 from toolvalidator.llm.trace import trace_context
-from toolvalidator.prompts.testgen import JUDGE_TEST_V1
-from toolvalidator.testgen.schemas import GeneratedTest, JudgeVerdict
+from toolvalidator.prompts.testgen import JUDGE_BATCH_V1, JUDGE_TEST_V1
+from toolvalidator.testgen.schemas import BatchVerdicts, GeneratedTest, JudgeVerdict
 
 SPEC = JUDGE_TEST_V1
 SYSTEM_PROMPT = SPEC.system
@@ -37,3 +37,18 @@ def judge_suite(
 ) -> list[tuple[GeneratedTest, JudgeVerdict]]:
     """Judge every candidate. Callers keep the valid ones."""
     return [(test, judge_test(client, request, test)) for test in tests]
+
+
+def judge_batch(
+    client: ScadsClient, request: CapabilityRequest, tests: Sequence[GeneratedTest]
+) -> list[tuple[GeneratedTest, JudgeVerdict]]:
+    """Judge every candidate in ONE call (``judge_batch@v1``), same criteria as one-by-one."""
+    if not tests:
+        return []
+    spec = JUDGE_BATCH_V1
+    with trace_context(prompt_id=spec.id, prompt_version=spec.version):
+        result = client.complete(
+            "judge", system=spec.system, user=spec.render(request=request, tests=tests)
+        )
+    verdicts = BatchVerdicts.parse(parse_json_object(result.content)).in_order(len(tests))
+    return list(zip(tests, verdicts, strict=True))

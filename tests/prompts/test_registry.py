@@ -89,3 +89,15 @@ def test_docs_prompts_md_is_in_sync_with_the_registry() -> None:
     # Regenerate with: python -m toolvalidator.cli prompts --write
     assert DOC.exists(), "docs/PROMPTS.md is missing; run the CLI to generate it"
     assert DOC.read_text(encoding="utf-8") == markdown_catalogue()
+
+
+def test_judge_batch_prompt_numbers_every_case_and_never_shows_code() -> None:
+    judge = spec("judge_batch", "v1")
+    assert judge.role == "judge"
+    rendered = judge.render(
+        request=REQUEST,
+        tests=[GeneratedTest(input="2 3", output="5"), GeneratedTest(input="1 1", output="2")],
+    )
+    assert "Test 0" in rendered and "Test 1" in rendered
+    assert REQUEST.description in rendered
+    assert "Program source" not in rendered and "```python" not in rendered
