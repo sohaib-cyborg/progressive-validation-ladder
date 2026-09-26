@@ -196,3 +196,23 @@ def test_rate_limit_gives_up_after_the_configured_waits() -> None:
     with pytest.raises(LLMError, match="rate limit"):
         client.complete("judge", system="s", user="u")
     assert len(waits) == 2
+
+
+# --- completion cap ------------------------------------------------------------------
+
+
+def test_every_call_caps_completion_tokens() -> None:
+    fake = _fake_openai(_response("x"))
+    ScadsClient(SETTINGS, openai_client=fake).complete("judge", system="s", user="u")
+    assert fake.completions.calls[0]["max_tokens"] == 8192
+    capped = SETTINGS.model_copy(update={"max_completion_tokens": 100})
+    ScadsClient(capped, openai_client=fake).complete("judge", system="s", user="u")
+    assert fake.completions.calls[1]["max_tokens"] == 100
+
+
+def test_a_reply_cut_off_at_the_cap_is_unusable() -> None:
+    response = _response('{"verdicts": [')
+    response.choices[0].finish_reason = "length"
+    fake = _fake_openai(response)
+    with pytest.raises(LLMOutputError, match="truncated"):
+        ScadsClient(SETTINGS, openai_client=fake).complete("judge", system="s", user="u")

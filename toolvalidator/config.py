@@ -34,6 +34,10 @@ class LLMSettings(_Frozen):
     # 2026-09-24). On HTTP 429 the client waits for the stated reset, this many times.
     rate_limit_waits: int = Field(default=10, ge=0)
     max_rate_limit_wait_s: float = Field(default=120.0, gt=0)
+    # Reasoning counts as completion. One GLM-5.3-Flash comparison ran away to 11,860 tokens
+    # (2026-09-26), more than a whole rate-limit window; a capped reply that is cut off
+    # raises LLMOutputError instead of being parsed.
+    max_completion_tokens: int = Field(default=8192, gt=0)
 
     @model_validator(mode="after")
     def _judge_is_independent(self) -> Self:

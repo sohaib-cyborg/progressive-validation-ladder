@@ -79,6 +79,9 @@ class ScadsClient:
         latency = time.perf_counter() - start  # includes any rate-limit waits
         message = response.choices[0].message if response.choices else None
         content = message.content if message is not None else None
+        if response.choices and getattr(response.choices[0], "finish_reason", None) == "length":
+            cap = self._settings.max_completion_tokens
+            raise LLMOutputError(f"{role} ({model}) reply truncated at {cap} completion tokens")
         if not isinstance(content, str):
             raise LLMOutputError(f"{role} ({model}) returned no content")
         usage = response.usage
@@ -97,7 +100,10 @@ class ScadsClient:
         while True:
             try:
                 return self._client.chat.completions.create(
-                    model=model, messages=messages, temperature=0.0
+                    model=model,
+                    messages=messages,
+                    temperature=0.0,
+                    max_tokens=self._settings.max_completion_tokens,
                 )
             except RateLimitError as exc:
                 if waits >= self._settings.rate_limit_waits:
