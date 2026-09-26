@@ -477,3 +477,17 @@ circular and say nothing about synthesized tools, which arrive with no tests.
 never observed (today: `mutation_score`, S5 unbuilt) is dropped and listed as dropped.
 Folds are grouped by `problem_id`. RunBugRun has no synthesis metadata, so that PLAN §5.2
 signal is absent, not imputed.
+
+## 2026-09-26 — Judge budget, RQ3 test source, RQ1/RQ2 headline, S6 verdict mapping
+Approved by Sohaib after the 2026-09-24 report.
+**Judge budget:** judge a whole generated suite in **one** call (a new prompt version beside
+`judge_test@v1`, which stays for comparison), keeping GLM-5.3. If measured real usage still
+does not fit Tier 2 in time, switch the judge to `GLM-5.3-Flash` (10,000 tokens / window);
+that switch is a `.env` change and is recorded here when made.
+**RQ3 test source:** tests are generated **once per entry, from the request alone (blind to
+code)**, judged once, and run on both the buggy and the fixed tool. Paired comparison, half
+the LLM cost, no bias from seeing buggy code, and it matches upstream (the request exists
+before the tool). A `show_code=True` side arm is optional if time allows.
+**RQ1/RQ2 headline:** all dataset tests; the 25-test cap is reported as a sensitivity check.
+**S6:** the S6 stage may change `pipeline.run_pipeline` so the score maps to ACCEPT vs
+NEEDS_REVIEW (a pipeline-contract change, approved).

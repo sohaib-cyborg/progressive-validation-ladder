@@ -18,6 +18,7 @@ toolvalidator/                     # ← repo root
 │   ├── PLAN.md                    # the research plan + 2-week schedule
 │   ├── STRUCTURE.md               # this file
 │   ├── DECISIONS.md               # append-only log of design decisions + why
+│   ├── PROJECT_LOG.md             # one-file overview: architecture, timeline, results, open items
 │   └── reports/                   # progress reports: what was done, commands, real output
 │       ├── README.md              # index + entry format
 │       ├── SPRINTS.md             # sprint plan (5 sprints over the 14 days) + risks
