@@ -1,6 +1,6 @@
 # Project D — Status Report
 
-**As of:** 2026-09-24 (Day 8 of the 14-day plan) · **Branch:** main · **Gate:** green
+**As of:** 2026-09-26 (Day 10 of the 14-day plan) · **Branch:** main · **Gate:** green
 (`ruff format . && ruff check . && mypy --strict toolvalidator data experiments && pytest -q`)
 
 A snapshot of what exists, how it works, what has actually been run, and what the
@@ -250,6 +250,78 @@ in opposite directions.
 This is why the experiment reports that count alongside every rate.
 
 ---
+
+### 4.5 Tier 1 — the RQ1/RQ2 headline (2026-09-26)
+**1,999 entries = 3,998 tools**, seed 20260917, valid+test, ≤ 2 per problem, **all dataset
+tests** (no cap), 6 workers, 1 error (an analyzer crash: mypy exited 2 — raised, not a verdict).
+`results/tier1/`.
+
+| Configuration | Slip (buggy accepted) | False rejection (fixed rejected) |
+|---|---|---|
+| Static only (S1 + S2) | **1,999 / 1,999 = 100%** | 0 / 1,999 |
+| Static + execution | **7 / 1,999 = 0.35%** | **30 / 1,999 = 1.5%** |
+
+- Static recall **0.00 in all 11 bug categories**; execution recall 0.994–1.00 everywhere.
+- `unusable_fixed` = 30: every false rejection is a "fixed" program that fails its own
+  dataset tests in our sandbox (label noise or too slow for 10 s), so 1.5% is an upper bound.
+- Cost 3.13 s/tool at 6 workers **while the RQ3 run shared the machine** — inflated; the
+  uncontended pilot measured 2.16 s/tool at 10 workers.
+- The pilot (200) and Tier 1 (1,999) agree: 0.5% vs 0.35% slip, 2.0% vs 1.5% false rejection.
+
+### 4.6 RQ3 — tests generated from the request alone (2026-09-26)
+**Eval set: 274 of 300 entries completed (548 tools)**; 26 lost to LLM failures (batched judge:
+15 replies past the 8,192-token cap + 1 network reset; generator: 7 replies past 16,384 +
+3 empty replies). The lost entries are likely the longer, harder problems, so the completed
+sample may lean easier. The 50-entry dev set is disjoint and not reported.
+Per entry **one** suite of 8 tests, generated **blind** (request only: no code, no statement
+samples), judged in one call, run on the buggy **and** the fixed tool. Generator
+`Qwen/Qwen3.8-27B`, judge `zai-org/GLM-5.3-Flash`; prompts `generate_tests@v1`,
+`judge_batch@v1`, `explain_code@v1`, `compare_explanation@v2`. `results/rq3/testgen_eval.*`.
+
+| Test source | Bugs caught | Correct tools rejected | Median tests |
+|---|---|---|---|
+| `examples` — statement samples, no LLM | 204 / 274 = **74.5%** | 6 / 274 = 2.2% | 3 |
+| `generated` — all 8 generated tests | 246 / 274 = **89.8%** | 22 / 274 = **8.0%** | 8 |
+| `judged` — generated, judge-filtered | 243 / 274 = **88.7%** | 15 / 274 = **5.5%** | 8 |
+| (reference) the dataset's own ~100 tests, Tier 1 | 99.65% | 1.5% | ~103 |
+
+- **Generated tests catch 15 points more bugs than the statement samples**, at the cost of
+  more false rejections (wrong expected outputs in generated tests).
+- **The judge rejected only 15 of 2,136 tests (0.7%)**, yet that removed 7 of 22 false
+  rejections for 3 lost catches. The judge is a light but useful filter.
+- Gain over samples is largest for `control_flow` (0.62 → 0.88) and `assignment`
+  (0.68 → 0.83); `io` is unchanged (0.89).
+- **Rubber-duck (S5b), where it produced a verdict:** flagged 186 / 212 buggy (87.7%) and
+  4 / 245 fixed (1.6%). Of the 31 bugs the judged tests missed, 18 had a semantic verdict and
+  **12 were flagged**; it also flagged 2 of 259 correct tools that passed the tests.
+- **S5b's signal is missing for 91 / 548 tools (16.6%)** — comparisons past the 8,192-token
+  cap — and **more often for buggy (62 / 274) than fixed (29 / 274)** tools.
+- Caveat: CodeNet descriptions contain the statement samples, and the generator copies them,
+  so the `generated` suite overlaps `examples`.
+- Cost: ~5,350 generator + ~6,180 judge tokens per completed entry; 12,270 s wall clock at 4
+  workers, sharing the machine with Tier 1.
+
+### 4.7 RQ4 — a reliability score fit from the validator's own signals (2026-09-26)
+Logistic regression, **out-of-fold, 5 folds grouped by problem** (231 problems), on the 548
+RQ3 eval tools. Label = buggy vs fixed; inputs never include the dataset's own tests.
+`results/rq4/score_eval.json`.
+
+| Signals | AUC | Spearman ρ | Brier |
+|---|---|---|---|
+| **All** (static + generated tests + S5b) | **0.966** | **0.808** | **0.058** |
+| Without S5b (both semantic signals removed) | 0.927 | 0.740 | 0.092 |
+| Generated tests only | 0.931 | 0.748 | 0.090 |
+| S5b only | 0.916 | 0.722 | 0.087 |
+| Static only (bandit + mypy) | 0.573 | 0.128 | 0.246 |
+
+- Calibration is good at the ends (predicted 0.01 → 2% correct in the lowest bin, n = 210;
+  predicted 0.95 → 96% in the highest, n = 236); the middle bins are small (6–19) and noisy.
+- Largest learned weights (standardised): `test_pass_rate` +2.80, `semantic_violation`
+  −1.73, `semantics_score` +1.29. One-at-a-time ablation understates S5b because its two
+  signals substitute for each other; the joint ablation above is the one to quote.
+- Caveats: S5b's missingness correlates with the label (4.6), so part of its contribution
+  may be that artifact; the label is buggy-vs-fixed on human bugs, not synthesized tools;
+  no synthesis metadata or mutation score exists yet.
 
 ## 5. Not built yet
 

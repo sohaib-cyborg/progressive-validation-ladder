@@ -235,4 +235,7 @@ Status (fill in after running):
   fixed + real-Docker regression test. `compare_explanation@v2` is the S5b default.
 - Running at session end: RQ3 eval (300 entries, `results/rq3/testgen_eval.*`) and Tier 1
   (2,000 entries, `results/tier1/`). Both resume/rerun safely. Then: RQ4 fit, tables.
+- **Runs finished (Day 10 evening):** Tier 1 (1,999 entries): execution slip 0.35%, FR 1.5%;
+  RQ3 eval (274/300): generated tests catch 89.8% vs samples 74.5%; RQ4 AUC 0.966
+  (without S5b 0.927). Written into STATUS §4.5–4.7. Next: RQ5 (S7), S5 mutation, S6 stage.
 

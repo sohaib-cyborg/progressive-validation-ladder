@@ -18,10 +18,10 @@ gate green: **322 tests, 0 skipped** (end of Day 10 work).
 
 | Research question | What answers it | State (2026-09-26) |
 |---|---|---|
-| **RQ1** slip rate, naive vs sandboxed | `run_static_vs_dynamic.py` | 🟡 pilot numbers (200 entries); **Tier 1 (2,000 entries, all tests) running** |
-| **RQ2** static alone vs dynamic *(headline)* | same runner | 🟡 pilot: static catches 0/200 bugs, execution 199/200 |
-| **RQ3** tests from the request, best strategy | `run_testgen_strategies.py` | 🟡 runner built; dev set (50) done; **eval set (300) running** |
-| **RQ4** reliability score correlates with correctness | `fit_reliability_score.py` | 🟡 runner built; fits on the RQ3 eval rows once they exist |
+| **RQ1** slip rate, naive vs sandboxed | `run_static_vs_dynamic.py` | ✅ **Tier 1 done** (1,999 entries): static slip 100%, execution 0.35% |
+| **RQ2** static alone vs dynamic *(headline)* | same runner | ✅ static recall 0.00 in all 11 categories; execution ≥ 0.994 |
+| **RQ3** tests from the request, best strategy | `run_testgen_strategies.py` | ✅ eval done (274/300 entries): generated 89.8% vs samples 74.5% |
+| **RQ4** reliability score correlates with correctness | `fit_reliability_score.py` | ✅ out-of-fold AUC 0.966, ρ 0.808, Brier 0.058 |
 | **RQ5** MCP schema accuracy | S7 + `run_mcp_accuracy.py` | ❌ not started |
 
 | Stage | State |
@@ -31,8 +31,8 @@ gate green: **322 tests, 0 skipped** (end of Day 10 work).
 | S6 score | 🟡 `scoring/signals.py` + `scoring/model.py` built; stage + verdict mapping not yet |
 | S5 mutation (arms A, B) · S7 MCP schema | ❌ not built |
 
-**Schedule reality:** PLAN.md wanted all experiments done by Day 10 (today). RQ3–RQ5 have no
-results yet. Commits happened on Days 1, 2, 7, 8 (none on Days 3–6).
+**Schedule reality:** PLAN.md wanted all experiments done by Day 10. RQ1–RQ4 have results as
+of the end of Day 10; **RQ5 (MCP schema) and S5 mutation are not started.** Commits happened on Days 1, 2, 7, 8 (none on Days 3–6).
 
 ---
 
@@ -319,6 +319,16 @@ This log created.
 - **The cap matters:** all 18 extra slips fail only 1–3 of ~103 tests uncapped (rare-input
   bugs); capped recall falls to 0.78–0.90 in most categories. 87% of problems have > 25 tests.
 - Results: `results/pilot`, `pilot2`, `pilot3`, `pilot3_cap25` (git-ignored).
+
+### 7.1b Final runs (Day 10) — full tables in `reports/STATUS.md` §4.5–4.7
+- **Tier 1 RQ1/RQ2** (1,999 entries, all tests): static slip 100%, false rejection 0%;
+  static + execution slip **0.35%** (7), false rejection **1.5%** (30 = all `unusable_fixed`).
+- **RQ3** (274/300 eval entries, one blind 8-test suite per entry): bugs caught — statement
+  samples 74.5%, generated 89.8%, judged 88.7%; correct tools rejected 2.2% / 8.0% / 5.5%.
+  S5b flagged 87.7% of buggy vs 1.6% of fixed tools where it gave a verdict, and 12 of 18
+  bugs the tests missed; its signal is missing for 16.6% of tools (more for buggy).
+- **RQ4** (548 tools, out of fold, grouped by problem): AUC **0.966**, ρ **0.808**, Brier
+  **0.058**; without S5b 0.927; tests only 0.931; static only 0.573.
 
 ### 7.2 Measured costs
 Static ~0.5 s/tool; one sandbox call ~0.3 s; 50 tests batched in one call 1.32 s (vs ~300 ms
