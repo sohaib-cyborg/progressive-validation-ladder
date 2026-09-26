@@ -71,3 +71,12 @@ def test_no_usable_rows_is_an_error(tmp_path: Path) -> None:
     rows_path.write_text("", encoding="utf-8")
     with pytest.raises(ValueError, match="no rows"):
         main(["--rows", str(rows_path), "--out", str(tmp_path / "x.json")])
+
+
+def test_named_signal_sets_are_fit_separately() -> None:
+    report = fit_rows(_rows(), folds=5)
+    sets = report["signal_sets"]
+    assert isinstance(sets, dict)
+    assert set(sets) == {"all", "without_s5b", "tests_only", "s5b_only", "static_only"}
+    for metrics in sets.values():
+        assert isinstance(metrics, dict) and {"auc", "spearman", "brier"} <= set(metrics)

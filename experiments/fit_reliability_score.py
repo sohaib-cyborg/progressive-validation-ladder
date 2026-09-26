@@ -19,22 +19,42 @@ from pydantic import JsonValue
 from experiments.run_testgen_strategies import StrategyOutcome
 from toolvalidator.scoring.model import evaluate
 
+STATIC = ("bandit_findings", "mypy_error_count")
+TESTS = ("test_pass_rate", "tests_run")
+S5B = ("semantics_score", "semantic_violation")
+# Joint ablations: one-at-a-time ablation hides correlated signals (the two S5b ones).
+SIGNAL_SETS: dict[str, tuple[str, ...]] = {
+    "all": STATIC + TESTS + S5B,
+    "without_s5b": STATIC + TESTS,
+    "tests_only": TESTS,
+    "s5b_only": S5B,
+    "static_only": STATIC,
+}
+
 
 def fit_rows(rows: Sequence[StrategyOutcome], *, folds: int = 5) -> dict[str, JsonValue]:
     usable = [r for r in rows if r.gate_category is None and r.signals is not None]
     if not usable:
         raise ValueError("no rows with signals to fit")
-    report = evaluate(
-        [r.signals for r in usable if r.signals is not None],
-        [r.is_correct for r in usable],
-        [r.problem_id for r in usable],
-        folds=folds,
-    )
+    signals = [r.signals for r in usable if r.signals is not None]
+    labels = [r.is_correct for r in usable]
+    groups = [r.problem_id for r in usable]
+    report = evaluate(signals, labels, groups, folds=folds)
+    sets: dict[str, JsonValue] = {}
+    for name, chosen in SIGNAL_SETS.items():
+        fit = evaluate(signals, labels, groups, folds=folds, signals=chosen)
+        sets[name] = {
+            "signals": list(chosen),
+            "auc": fit.auc,
+            "spearman": fit.spearman,
+            "brier": fit.brier,
+        }
     return {
         "n_rows": len(rows),
         "n_gate_rejected_excluded": sum(1 for r in rows if r.gate_category is not None),
         "n_semantic_missing": sum(1 for r in usable if r.semantic_error is not None),
         "fit": report.model_dump(mode="json"),
+        "signal_sets": sets,
     }
 
 
