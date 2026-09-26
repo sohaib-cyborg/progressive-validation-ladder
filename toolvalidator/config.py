@@ -37,7 +37,9 @@ class LLMSettings(_Frozen):
     # Reasoning counts as completion. One GLM-5.3-Flash comparison ran away to 11,860 tokens
     # (2026-09-26), more than a whole rate-limit window; a capped reply that is cut off
     # raises LLMOutputError instead of being parsed.
-    max_completion_tokens: int = Field(default=8192, gt=0)
+    max_completion_tokens: int = Field(default=8192, gt=0)  # judge role
+    # The generator's window is 40,000 tokens; 2 of 50 RQ3 dev generations exceeded 8,192.
+    generator_max_completion_tokens: int = Field(default=16384, gt=0)
 
     @model_validator(mode="after")
     def _judge_is_independent(self) -> Self:

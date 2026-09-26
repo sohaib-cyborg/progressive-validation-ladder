@@ -216,3 +216,10 @@ def test_a_reply_cut_off_at_the_cap_is_unusable() -> None:
     fake = _fake_openai(response)
     with pytest.raises(LLMOutputError, match="truncated"):
         ScadsClient(SETTINGS, openai_client=fake).complete("judge", system="s", user="u")
+
+
+def test_generator_has_its_own_larger_cap() -> None:
+    # Two of 50 RQ3 dev generations ran into 8,192 tokens; Qwen's window is 40,000.
+    fake = _fake_openai(_response("x"))
+    ScadsClient(SETTINGS, openai_client=fake).complete("generator", system="s", user="u")
+    assert fake.completions.calls[0]["max_tokens"] == 16384

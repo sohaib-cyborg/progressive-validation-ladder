@@ -80,7 +80,7 @@ class ScadsClient:
         message = response.choices[0].message if response.choices else None
         content = message.content if message is not None else None
         if response.choices and getattr(response.choices[0], "finish_reason", None) == "length":
-            cap = self._settings.max_completion_tokens
+            cap = self._cap(role)
             raise LLMOutputError(f"{role} ({model}) reply truncated at {cap} completion tokens")
         if not isinstance(content, str):
             raise LLMOutputError(f"{role} ({model}) returned no content")
@@ -103,7 +103,7 @@ class ScadsClient:
                     model=model,
                     messages=messages,
                     temperature=0.0,
-                    max_tokens=self._settings.max_completion_tokens,
+                    max_tokens=self._cap(role),
                 )
             except RateLimitError as exc:
                 if waits >= self._settings.rate_limit_waits:
@@ -114,6 +114,11 @@ class ScadsClient:
                 self._sleep(delay)
             except APIError as exc:
                 raise LLMError(f"{role} call to {model} failed: {exc}") from exc
+
+    def _cap(self, role: Role) -> int:
+        if role == "generator":
+            return self._settings.generator_max_completion_tokens
+        return self._settings.max_completion_tokens
 
     def _rate_limit_delay(self, message: str) -> float:
         found = _RESET.search(message)
