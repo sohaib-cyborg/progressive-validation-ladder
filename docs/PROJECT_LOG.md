@@ -6,7 +6,7 @@ what happened when, what was decided, and what the numbers are**. It summarises 
 links; the detailed sources are listed in §9.
 
 **Last updated:** 2026-09-26 (Day 10 of the 14-day plan in `PLAN.md`) · branch `main` ·
-gate green: **322 tests, 0 skipped** (end of Day 10 work).
+gate green: **323 tests, 0 skipped** (end of Day 10 work).
 
 > Rule for this file: every number comes from a real run and says where it came from;
 > anything estimated says "estimate". Append to §5 (timeline) and §7 (results) as work
@@ -32,7 +32,7 @@ gate green: **322 tests, 0 skipped** (end of Day 10 work).
 | S5 mutation (arms A, B) · S7 MCP schema | ❌ not built |
 
 **Schedule reality:** PLAN.md wanted all experiments done by Day 10. RQ1–RQ4 have results as
-of the end of Day 10; **RQ5 (MCP schema) and S5 mutation are not started.** Commits happened on Days 1, 2, 7, 8 (none on Days 3–6).
+of the end of Day 10; **RQ5 (MCP schema) and S5 mutation are not started.** Commits happened on Days 1, 2, 7, 8, 10 (none on Days 3–6 or 9).
 
 ---
 
@@ -127,14 +127,16 @@ stage will map the score to ACCEPT vs NEEDS_REVIEW (approved 2026-09-26, not bui
 |---|---|---|---|
 | S1 parse | `stages/s1_parse.py` | `ast.parse` | syntax error, parser overflow |
 | S2 static | `stages/s2_static.py` | bandit (subprocess) + mypy (in-process, own config) | bandit finding ≥ HIGH (configurable); mypy is a signal only |
-| S3 test-gen | `stages/s3_testgen.py` | generator proposes *n* tests; judge (other model family, **blind to code**) keeps valid ones | never |
+| S3 test-gen | `stages/s3_testgen.py` | generator proposes *n* tests; judge (other model family, **blind to code**) keeps valid ones — one call per test or one batched call per suite; a prebuilt suite can be recorded for several tools (RQ3 shares one per entry) | never |
 | S4 execute | `stages/s4_execute.py`, `harness.py`, `compare.py` | runs **all** tests in one container call; mode from declared inputs (`stdin` → text; typed params → import + call) | wrong output, crash, timeout, `no_tests`, `no_entrypoint` |
-| S5b rubber-duck | `stages/s5b_rubberduck.py` | explainer sees code only; comparer sees request + explanation only, returns met/violated/unknown per requirement; `semantics_score = met/(met+violated)` computed in Python | never |
+| S5b rubber-duck | `stages/s5b_rubberduck.py` | explainer sees code only; comparer (`compare_explanation@v2`) sees request + explanation only, returns met/violated/unknown per requirement; `semantics_score = met/(met+violated)` computed in Python | never |
 | S6 score | `scoring/` (stage planned) | see §3.6 | — |
 
 **Output comparison (S4):** trailing whitespace ignored; tokens compared exactly, except
 numbers get `math.isclose` (1e-6) **only when the expected token is fractional** — tolerance
-everywhere hid 4 real int-vs-float bugs. 10 s per test.
+everywhere hid 4 real int-vs-float bugs. 10 s per test. Inside the container each test's
+output goes to `case.out`/`case.err` (the runner's own reply files are `out`/`err`; sharing
+those names corrupted the reply — fixed 2026-09-26).
 
 ### 3.5 Sandbox (the safety boundary)
 
@@ -165,11 +167,15 @@ tests (no leftover containers).
 
 - One client (`llm/scads_client.py`), temperature 0, defensive JSON parsing; waits for the
   stated reset on HTTP 429 (bounded, logged). `alias-*` model names are banned.
+- **Completion caps** per call: judge 8,192 tokens, generator 16,384 (reasoning counts as
+  completion; a Flash comparison once produced 11,860). A reply cut off at the cap raises
+  `LLMOutputError` — it is never parsed.
 - **Tracing** (`llm/trace.py`): one JSONL row per call — prompt id + version, requested vs
   served model, tokens, latency, ok/error. **Replay** (`llm/replay.py`) answers from a trace
   and raises on a miss.
-- **Prompt registry** (`prompts/`): `generate_tests@v1`, `judge_test@v1`, `explain_code@v1`,
-  `compare_explanation@v1`. Released versions are immutable; `docs/PROMPTS.md` is generated
+- **Prompt registry** (`prompts/`): `generate_tests@v1`, `judge_test@v1`, `judge_batch@v1`
+  (whole suite in one call), `explain_code@v1`, `compare_explanation@v1` and `@v2` (v2 is the
+  S5b default: at most 6 requirements, do not solve the task). Released versions are immutable; `docs/PROMPTS.md` is generated
   and a test fails if it drifts.
 
 ### 3.8 Data
@@ -184,7 +190,19 @@ tests (no leftover containers).
 - Experiments use `valid` + `test` (11,665 entries), seeded, ≤ 2 entries per problem.
   Tier 1: 2,000 entries (4,000 tools). Tier 2 (LLM): 300 entries + disjoint 50-entry dev set.
 
-### 3.9 Module inventory (lines · tests)
+### 3.9 Experiments (what you run)
+
+| Runner | Answers | What it does |
+|---|---|---|
+| `run_static_vs_dynamic.py` | RQ1, RQ2 | per tool: static-only vs static + execution on the dataset's own tests; `--max-tests` cap (0 = all) |
+| `run_testgen_strategies.py` | RQ3 | per entry: one blind 8-test suite, batch-judged; per tool: S4 on `examples` / `generated` / `judged` arms + S5b; `--set dev\|eval`; appends per entry, resumes |
+| `fit_reliability_score.py` | RQ4 | fits the score on RQ3 rows (label = variant, group = problem); full fit + named signal sets (all, without S5b, tests only, S5b only, static only) |
+
+Shared plumbing in `common.py`: seeded sampling (≤ 2 per problem), per-entry test cap,
+worker count from CPUs and Docker memory, JSONL IO. Tier 2 dev = first 50 of the seeded
+order, eval = next 300, so Tier 2 is a subset of Tier 1.
+
+### 3.10 Module inventory (lines · tests)
 
 | Module | Lines | Test file (tests) |
 |---|---|---|
@@ -269,11 +287,17 @@ split S4 into stage + `harness.py` + `compare.py`; **typed function-call mode**;
   clashed with the runner's reply files; fixed with a real-Docker regression test),
   runaway comparisons (→ `compare_explanation@v2`), and missing failed-test indices.
 - Launched the **RQ3 eval run (300 entries)** and the **Tier 1 RQ1/RQ2 run (2,000
-  entries, all tests)** in parallel.
-Sohaib approved: batch-judge a suite in one call (keep GLM-5.3; GLM-5.3-Flash if still too
-slow); **generate RQ3 tests once per entry, blind to code, shared by buggy and fixed**;
-RQ1/RQ2 headline = all tests, cap as sensitivity; S6 may change the pipeline verdict mapping.
-This log created.
+  entries, all tests)** in parallel. Mid-run, the eval showed 26% of comparisons still
+  truncated; a probe of reasoning controls (`reasoning_effort=low`, two "disable thinking"
+  switches) was inconclusive (n = 1 each, still 5–7k completion tokens), so the run continued
+  and the missing semantic signal is reported, not imputed.
+- **Both runs finished.** RQ3 eval: 274/300 entries in 12,270 s (26 lost to LLM failures).
+  Tier 1: 1,999 entries in 12,525 s (1 analyzer error). RQ4 fitted on the RQ3 rows; the
+  runner gained **named signal sets** after one-at-a-time ablation hid S5b's value
+  (its two signals substitute for each other). Results in §7.1b and `STATUS.md` §4.5–4.7.
+- Decisions approved by Sohaib this day: batch-judge a suite in one call (GLM-5.3-Flash as
+  fallback, then adopted); **RQ3 tests once per entry, blind to code, shared by buggy and
+  fixed**; RQ1/RQ2 headline = all tests, cap as sensitivity; S6 may change the verdict mapping.
 
 ---
 
@@ -298,6 +322,9 @@ This log created.
 | 09-24 | 25-test cap = seeded sample per entry (buggy and fixed see the same tests) |
 | 09-24 | S6 inputs from generated tests only (leakage guard); missing → indicator |
 | 09-26 | Batch judging; per-entry blind test generation; all-tests headline; S6 verdict mapping approved |
+| 09-26 | Judge → `GLM-5.3-Flash` (GLM-5.3 window could not serve one call); completion caps; truncation raises; S5b failure keeps the entry with semantics missing |
+| 09-26 | After the dev run: harness file-name fix, generator cap 16,384, failed-test indices per arm, `compare_explanation@v2` as default |
+| 09-26 | RQ4 reports named signal sets (joint ablation), not only drop-one ablation |
 
 ---
 
@@ -331,7 +358,11 @@ This log created.
   **0.058**; without S5b 0.927; tests only 0.931; static only 0.573.
 
 ### 7.2 Measured costs
-Static ~0.5 s/tool; one sandbox call ~0.3 s; 50 tests batched in one call 1.32 s (vs ~300 ms
+**Real runs (Day 10):** RQ3 eval ~5,350 generator + ~6,180 judge tokens per completed entry,
+12,270 s for 300 entries at 4 workers; Tier 1 3.13 s/tool at 6 workers — both while sharing
+the machine, so inflated. Dev-run medians per call: generate 2,346 tokens / 14.5 s, batched
+judge 1,584 / 9.2 s, explain 895 / 5.7 s, compare 2,066 / 23.0 s.
+**Earlier:** static ~0.5 s/tool; one sandbox call ~0.3 s; 50 tests batched in one call 1.32 s (vs ~300 ms
 per test unbatched). LLM, n = 1 each on a toy task: S3 judge 278 tokens / 3.7 s; S5b
 compare 1,015 tokens / 45.5 s; S5b explain 486 tokens / 2.5 s. SCADS latency varies ~10x
 between identical calls.
@@ -344,11 +375,15 @@ Correct `max` program: 4 met, 0 violated (score 1.0). `min`-for-`max` bug: 3 met
 
 ## 8. Open items and known issues
 
-1. **Next:** RQ3 eval summary → RQ4 fit on it → Tier 1 table → S6 stage (needs a saved
-   fitted model; clean split wants a new `scoring/metrics.py`, not yet approved).
-2. **Judge budget** is the binding constraint for every LLM experiment (§3.7).
-3. S5 mutation (arm A needs a script→function wrapping step) and S7 MCP schema: not started.
-4. Four files slightly over the size guideline (§3.9).
+1. **Next:** RQ5 (S7 MCP schema) — the only RQ with no result; then S5 mutation (arm A needs a
+   script→function wrapping step); then the S6 stage (needs a saved fitted model; the clean
+   split wants a new `scoring/metrics.py`, not yet approved).
+2. **RQ3 caveats to carry into the report:** 26/300 entries lost to LLM failures (likely
+   the harder problems); S5b signal missing for 16.6% of tools, more for buggy (62) than
+   fixed (29), so part of S5b's RQ4 gain may be that missingness; generated suites copy the
+   statement samples (arm overlap); the Flash judge's strength vs the generator is unverified.
+3. **Judge budget and runaway reasoning** remain the binding LLM constraints (§3.7).
+4. Five files over the size guideline (§3.10).
 5. 3 correct programs are too slow for a 10 s per-test limit; 1 expected output looks
    malformed upstream (entry 26394).
 6. Planned `agents/` (LangGraph) layer not built; cut first if the schedule bites.
