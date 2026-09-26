@@ -511,3 +511,22 @@ stronger reasoner" requirement is **unverified** for Flash; stated as a limitati
 (older); gemma-4-26B (smaller than the generator); waiting out GLM-5.3 (a call that cannot
 fit its window never completes).
 
+
+## 2026-09-26 — RQ3 dev run: fixes before the eval run; compare_explanation@v2
+The 50-entry dev run (never reported) finished in 2,212 s with 4 entries lost and 15/92
+S5b comparisons truncated. Changes made before the eval run, each from that evidence:
+- **Harness file clash fixed** (stdin + function harness): per-test output files now
+  `case.out`/`case.err`. The old `out`/`err` were the runner's own files, so a tool that
+  printed more than the JSON reply corrupted it (entry 289618). Always loud, never a
+  silent verdict change; RQ1/RQ2 pilots had 0 errors so are unaffected.
+- **Generator completion cap 16,384** (judge stays 8,192): 2/50 generations hit 8,192.
+- **Failed test indices recorded per arm** (S4 reports at most 5), so a wrong generated
+  test can be told apart from an imperfect "fixed" program.
+- **`compare_explanation@v2` is the S5b default** (v1 kept). v2 adds "at most 6
+  requirements" and "do not solve the task yourself". Re-sending the 15 truncated v1
+  prompts: 6 completed under v2; 8/8 previously fine comparisons kept the same
+  any-violation answer. Remaining truncations are counted as missing, not imputed.
+**Dev observations to carry into the report (dev only, indicative):** the batched judge
+accepted 160/160 tests in the first 20 entries, so `judged` = `generated` there; the
+blind generator copies the statement's own samples because CodeNet descriptions contain
+them, so `generated` overlaps `examples`.
