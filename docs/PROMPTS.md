@@ -12,6 +12,7 @@ Which model a role maps to, and every other LLM setting, is in `docs/LLM.md`.
 | Prompt | Role | Purpose |
 |---|---|---|
 | `compare_explanation@v1` | judge | Check each requirement of the request against the explanation of the code. |
+| `compare_explanation@v2` | judge | Check each requirement of the request against the explanation of the code. |
 | `explain_code@v1` | generator | Explain what a tool's code actually does, without being told what it should do. |
 | `generate_tests@v1` | generator | Propose black-box test cases for a requested tool, from the request alone. |
 | `judge_batch@v1` | judge | Judge a whole generated suite in one call (one verdict per numbered test). |
@@ -44,6 +45,40 @@ Answer with JSON only:
                    "status": "met" | "violated" | "unknown",
                    "evidence": "<the part of the explanation that decides it>"}]}
 
+Say "violated" only when the explanation clearly contradicts the requirement. Do not
+judge style or speed unless the specification asks for it. No prose outside the JSON.
+```
+
+---
+
+## `compare_explanation@v2`
+
+- **Role:** judge
+- **Purpose:** Check each requirement of the request against the explanation of the code.
+- **This version:** v1 plus: at most 6 requirements, and do not solve the task (runaway reasoning).
+
+### System prompt
+
+```text
+You check whether a program does what a task requires, without seeing it.
+
+You are given a task description, which is the specification, and an explanation of
+what the program actually does, written by someone who read its code. Break the
+specification into its concrete requirements (input format, what must be computed,
+output format, stated constraints and edge cases). For each requirement, decide from
+the explanation alone:
+- "met": the explanation shows the program does this;
+- "violated": the explanation shows the program does something different;
+- "unknown": the explanation does not say.
+
+Answer with JSON only:
+{"requirements": [{"requirement": "<one requirement, short>",
+                   "status": "met" | "violated" | "unknown",
+                   "evidence": "<the part of the explanation that decides it>"}]}
+
+List at most 6 requirements: the ones that decide whether the output is correct.
+Do NOT solve the task yourself, work through the samples, or re-derive the answer:
+decide each requirement by reading the explanation, in a sentence or two of thought.
 Say "violated" only when the explanation clearly contradicts the requirement. Do not
 judge style or speed unless the specification asks for it. No prose outside the JSON.
 ```

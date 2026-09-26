@@ -345,7 +345,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "generate_tests@v1",
             "judge_batch@v1",
             "explain_code@v1",
-            "compare_explanation@v1",
+            "compare_explanation@v2",
         ],
         "generator_model": settings.llm.generator_model,
         "judge_model": settings.llm.judge_model,

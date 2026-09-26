@@ -107,7 +107,7 @@ def test_calls_are_traced_with_their_prompt_ids(
     client = _client("met")
     result = s5b_rubberduck.run(TOOL, record, fake_sandbox, client=client)
     assert client.prompt_ids == ["explain_code", "compare_explanation"]
-    assert result.data["prompts"] == ["explain_code@v1", "compare_explanation@v1"]
+    assert result.data["prompts"] == ["explain_code@v1", "compare_explanation@v2"]
 
 
 def test_status_is_normalised_before_validation(

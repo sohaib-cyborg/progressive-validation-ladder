@@ -101,3 +101,12 @@ def test_judge_batch_prompt_numbers_every_case_and_never_shows_code() -> None:
     assert "Test 0" in rendered and "Test 1" in rendered
     assert REQUEST.description in rendered
     assert "Program source" not in rendered and "```python" not in rendered
+
+
+def test_compare_v2_keeps_v1_criteria_and_forbids_solving_the_task() -> None:
+    v1, v2 = spec("compare_explanation", "v1"), spec("compare_explanation", "v2")
+    assert v2.role == v1.role == "judge"
+    assert v2.renderer is v1.renderer  # same input, only the instructions changed
+    assert "Do NOT solve the task yourself" in v2.system
+    assert "at most 6 requirements" in v2.system
+    assert "Do NOT solve" not in v1.system  # released versions are never edited

@@ -97,3 +97,24 @@ COMPARE_EXPLANATION_V1 = PromptSpec(
     system=COMPARE_SYSTEM,
     renderer=render_compare,
 )
+
+# v2 (tuned on the RQ3 dev set, 2026-09-26): 15 of 92 v1 comparisons ran past the
+# completion cap. Re-sent with v2, 6 of those 15 completed, and 8 of 8 comparisons that
+# already worked kept the same "any violation" answer. Same input, same output schema.
+COMPARE_SYSTEM_V2 = COMPARE_SYSTEM.replace(
+    'Say "violated" only when the explanation clearly contradicts the requirement.',
+    "List at most 6 requirements: the ones that decide whether the output is correct.\n"
+    "Do NOT solve the task yourself, work through the samples, or re-derive the answer:\n"
+    "decide each requirement by reading the explanation, in a sentence or two of thought.\n"
+    'Say "violated" only when the explanation clearly contradicts the requirement.',
+)
+
+COMPARE_EXPLANATION_V2 = PromptSpec(
+    id="compare_explanation",
+    version="v2",
+    role="judge",
+    purpose="Check each requirement of the request against the explanation of the code.",
+    changelog="v1 plus: at most 6 requirements, and do not solve the task (runaway reasoning).",
+    system=COMPARE_SYSTEM_V2,
+    renderer=render_compare,
+)

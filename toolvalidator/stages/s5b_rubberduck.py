@@ -26,7 +26,7 @@ from toolvalidator.contracts import (
 )
 from toolvalidator.llm.scads_client import LLMOutputError, ScadsClient, parse_json_object
 from toolvalidator.llm.trace import trace_context
-from toolvalidator.prompts.rubberduck import COMPARE_EXPLANATION_V1, EXPLAIN_CODE_V1
+from toolvalidator.prompts.rubberduck import COMPARE_EXPLANATION_V2, EXPLAIN_CODE_V1
 from toolvalidator.prompts.spec import PromptSpec
 
 STAGE = "s5b_rubberduck"
@@ -75,7 +75,7 @@ def explain_code(client: ScadsClient, code: str) -> Explanation:
 def compare_explanation(
     client: ScadsClient, request: CapabilityRequest, explanation: str
 ) -> Comparison:
-    content = _ask(client, COMPARE_EXPLANATION_V1, request=request, explanation=explanation)
+    content = _ask(client, COMPARE_EXPLANATION_V2, request=request, explanation=explanation)
     return Comparison.parse(parse_json_object(content))
 
 
@@ -107,7 +107,7 @@ def run(
             for check in comparison.requirements
             if check.status == "violated"
         ],
-        "prompts": [_label(EXPLAIN_CODE_V1), _label(COMPARE_EXPLANATION_V1)],
+        "prompts": [_label(EXPLAIN_CODE_V1), _label(COMPARE_EXPLANATION_V2)],
     }
     detail = f"{met} met, {violated} violated, {unknown} unknown of {len(comparison.requirements)}"
     return record.add(StageResult(stage=STAGE, passed=True, detail=detail, data=data))
