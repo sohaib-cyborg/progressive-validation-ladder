@@ -6,12 +6,13 @@ from typing import Any
 import pytest
 
 from tests.conftest import FakeSandbox
-from toolvalidator.contracts import ToolArtifact, ValidationRecord
+from toolvalidator.contracts import CapabilityRequest, ToolArtifact, ValidationRecord
 from toolvalidator.llm.scads_client import LLMOutputError, LLMResult
 from toolvalidator.llm.trace import current_context
 from toolvalidator.stages import s3_testgen
 
 TOOL = ToolArtifact(tool_id="t1", code="print(int(input()) + 1)")
+REQUEST = CapabilityRequest(name="inc", capability="inc", description="Print n + 1.")
 
 
 class _ScriptedClient:
@@ -111,3 +112,37 @@ def test_calls_are_traced_with_their_prompt_ids(
     generated = json.dumps({"tests": [{"input": "1", "output": "2"}]})
     s3_testgen.run(TOOL, record, fake_sandbox, client=_Spy(generated, '{"valid": true}'), n=1)
     assert seen == [("generate_tests", "v1"), ("judge_test", "v1")]
+
+
+def test_build_suite_can_batch_the_judge_into_one_call() -> None:
+    generated = json.dumps(
+        {"tests": [{"input": "1", "output": "2"}, {"input": "5", "output": "7"}]}
+    )
+    batch = json.dumps(
+        {"verdicts": [{"index": 0, "valid": True}, {"index": 1, "valid": False, "reason": "no"}]}
+    )
+    client = _ScriptedClient(generated, batch)
+    request = ValidationRecord(request=REQUEST).request
+    suite = s3_testgen.build_suite(client, request, code=None, n=2, batch_judge=True)
+    assert client.roles == ["generator", "judge"]  # one judge call for the whole suite
+    assert [v.valid for _, v in suite.judged] == [True, False]
+    assert suite.saw_code is False and suite.requested == 2
+
+
+def test_a_precomputed_suite_is_recorded_without_calling_an_llm(
+    record: ValidationRecord, fake_sandbox: FakeSandbox
+) -> None:
+    client = _client([{"input": "1", "output": "2"}, {"input": "5", "output": "7"}], [True, False])
+    suite = s3_testgen.build_suite(client, record.request, code=None, n=2)
+    calls_before = len(client.roles)
+    result = s3_testgen.run(TOOL, record, fake_sandbox, suite=suite)
+    assert len(client.roles) == calls_before  # shared suite: no new calls
+    assert result.passed
+    assert result.data["accepted"] == 1 and result.data["generated"] == 2
+    assert result.data["tests"] == [{"input": "1", "output": "2"}]
+    assert result.data["saw_code"] is False
+
+
+def test_run_needs_a_client_or_a_suite(record: ValidationRecord, fake_sandbox: FakeSandbox) -> None:
+    with pytest.raises(ValueError, match="client or a suite"):
+        s3_testgen.run(TOOL, record, fake_sandbox)
