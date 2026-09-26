@@ -45,6 +45,7 @@ class ArmOutcome(BaseModel):
     n_tests: int
     pass_rate: float | None
     category: str | None  # S4 failure category; None = all tests passed
+    failed_tests: list[int] = []  # indices of failed tests (S4 reports at most 5)
 
     @property
     def failed(self) -> bool:
@@ -195,10 +196,17 @@ def _execute(
 
 def _outcome(result: StageResult, n_tests: int) -> ArmOutcome:
     rate = result.data.get("pass_rate")
+    failures = result.data.get("failures")
+    indices = [
+        f["index"]
+        for f in (failures if isinstance(failures, list) else [])
+        if isinstance(f, dict) and isinstance(f.get("index"), int)
+    ]
     return ArmOutcome(
         n_tests=n_tests,
         pass_rate=float(rate) if isinstance(rate, int | float) else None,
         category=None if result.passed else result.category,
+        failed_tests=[i for i in indices if isinstance(i, int)],
     )
 
 

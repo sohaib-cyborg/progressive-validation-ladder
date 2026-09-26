@@ -170,3 +170,11 @@ def test_an_unusable_rubberduck_reply_keeps_the_entry_with_semantics_missing() -
         assert row.semantics_score is None and row.semantic_violation is None
         assert row.semantic_error is not None and "LLMOutputError" in row.semantic_error
         assert row.signals is not None and row.signals.semantics_score is None
+
+
+def test_arms_record_which_tests_failed() -> None:
+    _, factory = _sandbox_factory(False)
+    buggy, _ = evaluate_entry(_entry(), _Client(), factory, Settings())  # type: ignore[arg-type]
+    assert buggy.arms["judged"].failed_tests == [0]
+    ok = ArmOutcome(n_tests=1, pass_rate=1.0, category=None)
+    assert ok.failed_tests == []  # default for rows written before this field existed
