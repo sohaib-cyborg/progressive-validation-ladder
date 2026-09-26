@@ -6,7 +6,7 @@ what happened when, what was decided, and what the numbers are**. It summarises 
 links; the detailed sources are listed in §9.
 
 **Last updated:** 2026-09-26 (Day 10 of the 14-day plan in `PLAN.md`) · branch `main` ·
-last commit before this file `0a0b410` · gate green: **296 tests, 0 skipped**.
+gate green: **322 tests, 0 skipped** (end of Day 10 work).
 
 > Rule for this file: every number comes from a real run and says where it came from;
 > anything estimated says "estimate". Append to §5 (timeline) and §7 (results) as work
@@ -18,16 +18,16 @@ last commit before this file `0a0b410` · gate green: **296 tests, 0 skipped**.
 
 | Research question | What answers it | State (2026-09-26) |
 |---|---|---|
-| **RQ1** slip rate, naive vs sandboxed | `run_static_vs_dynamic.py` | 🟡 pilot numbers (200 entries), uncapped and capped |
+| **RQ1** slip rate, naive vs sandboxed | `run_static_vs_dynamic.py` | 🟡 pilot numbers (200 entries); **Tier 1 (2,000 entries, all tests) running** |
 | **RQ2** static alone vs dynamic *(headline)* | same runner | 🟡 pilot: static catches 0/200 bugs, execution 199/200 |
-| **RQ3** tests from the request, best strategy | `run_testgen_strategies.py` | ❌ runner not built; S3 + S5b exist |
-| **RQ4** reliability score correlates with correctness | `fit_reliability_score.py` | ❌ runner not built; `scoring/` exists (synthetic tests only) |
+| **RQ3** tests from the request, best strategy | `run_testgen_strategies.py` | 🟡 runner built; dev set (50) done; **eval set (300) running** |
+| **RQ4** reliability score correlates with correctness | `fit_reliability_score.py` | 🟡 runner built; fits on the RQ3 eval rows once they exist |
 | **RQ5** MCP schema accuracy | S7 + `run_mcp_accuracy.py` | ❌ not started |
 
 | Stage | State |
 |---|---|
 | S1 parse · S2 static · S3 test-gen · S4 execute (stdin + typed) | ✅ built, tested, S4 verified in real Docker |
-| S5b rubber-duck | ✅ built; one real SCADS run on 2 toy tools |
+| S5b rubber-duck | ✅ built; `compare_explanation@v2` tuned on the dev set |
 | S6 score | 🟡 `scoring/signals.py` + `scoring/model.py` built; stage + verdict mapping not yet |
 | S5 mutation (arms A, B) · S7 MCP schema | ❌ not built |
 
@@ -203,9 +203,7 @@ tests (no leftover containers).
 | `data/loaders/runbugrun.py` | 219 | 10 |
 | `experiments/common.py` · `run_static_vs_dynamic.py` | 223 · 132 | 18 · 1 |
 
-Total ~3,160 lines of code; **296 tests, 29 marked `slow`** (real Docker, real SCADS, real
-dataset). Over the ~200-line guideline: `common.py` (223), `model.py` (211),
-`harness.py`/`trace.py` (210) — flagged, not yet split.
+Table above is as of Day 8. **Day 10 totals: ~3,760 lines of code; 322 tests, 32 marked `slow`** (real Docker, real SCADS, real dataset). Added on Day 10: `experiments/run_testgen_strategies.py` (364), `experiments/fit_reliability_score.py` (60). Over the ~200-line guideline: `run_testgen_strategies.py` (364), `common.py` (223), `harness.py` (212), `model.py` (211), `trace.py` (210) — flagged; splitting the first two needs new files (to be approved).
 
 ---
 
@@ -259,7 +257,19 @@ split S4 into stage + `harness.py` + `compare.py`; **typed function-call mode**;
   `scoring/model.py`.
 - 25-test cap implemented and **capped pilot** run (§7.2).
 
-### Day 10 — 2026-09-26 · decisions + this file
+### Day 10 — 2026-09-26 · decisions, RQ3 build, dev run, fixes, runs launched
+- Decisions approved (below); this log created.
+- `judge_batch@v1`: one judge call per suite (1,412 tokens for 8 tests on a real problem).
+- S3 can record a prebuilt suite; RQ3 runner (arms `examples`/`generated`/`judged` + S5b)
+  and RQ4 runner (`fit_reliability_score.py`) built.
+- **Judge switched to GLM-5.3-Flash**: GLM-5.3's 3,000-token window could not serve one
+  S5b comparison (a Flash comparison later ran to 11,860 completion tokens). Completion
+  caps added (judge 8,192, generator 16,384); truncation raises.
+- **Dev run (50 entries, 37 min)** surfaced a real **sandbox harness bug** (per-test files
+  clashed with the runner's reply files; fixed with a real-Docker regression test),
+  runaway comparisons (→ `compare_explanation@v2`), and missing failed-test indices.
+- Launched the **RQ3 eval run (300 entries)** and the **Tier 1 RQ1/RQ2 run (2,000
+  entries, all tests)** in parallel.
 Sohaib approved: batch-judge a suite in one call (keep GLM-5.3; GLM-5.3-Flash if still too
 slow); **generate RQ3 tests once per entry, blind to code, shared by buggy and fixed**;
 RQ1/RQ2 headline = all tests, cap as sensitivity; S6 may change the pipeline verdict mapping.
@@ -324,9 +334,8 @@ Correct `max` program: 4 met, 0 violated (score 1.0). `min`-for-`max` bug: 3 met
 
 ## 8. Open items and known issues
 
-1. **Build next:** batched judge prompt (`judge_suite@v1`) → RQ3 runner (arms: statement
-   examples, generator only, generator + judge, S5b; tests per entry, blind) → RQ4 runner
-   (`scoring.model.evaluate` on RQ3 records) → S6 stage → Tier 1 run.
+1. **Next:** RQ3 eval summary → RQ4 fit on it → Tier 1 table → S6 stage (needs a saved
+   fitted model; clean split wants a new `scoring/metrics.py`, not yet approved).
 2. **Judge budget** is the binding constraint for every LLM experiment (§3.7).
 3. S5 mutation (arm A needs a script→function wrapping step) and S7 MCP schema: not started.
 4. Four files slightly over the size guideline (§3.9).

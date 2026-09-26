@@ -226,3 +226,13 @@ Status (fill in after running):
   choice (capped vs uncapped) is open.
 - Not done: S6 stage (verdict mapping = pipeline contract), RQ3/RQ4 runners, Tier 1 run.
 
+### Day 10 (2026-09-26) — decisions, RQ3/RQ4 runners, judge switch, runs launched
+- Approved: batched judge; RQ3 tests once per entry, blind to code; all-tests RQ1/RQ2
+  headline; S6 may change the verdict mapping. `docs/PROJECT_LOG.md` added (one-file log).
+- **Judge is now GLM-5.3-Flash** (GLM-5.3's window cannot serve one comparison). Caps:
+  judge 8,192, generator 16,384 completion tokens; truncation raises.
+- Dev run found a **real harness bug** (per-test `out`/`err` clashed with the runner's) —
+  fixed + real-Docker regression test. `compare_explanation@v2` is the S5b default.
+- Running at session end: RQ3 eval (300 entries, `results/rq3/testgen_eval.*`) and Tier 1
+  (2,000 entries, `results/tier1/`). Both resume/rerun safely. Then: RQ4 fit, tables.
+

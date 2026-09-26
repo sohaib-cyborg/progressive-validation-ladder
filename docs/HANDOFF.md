@@ -1,7 +1,7 @@
 # Handoff — start here in a new session
 
 **Written:** 2026-09-24 (Day 8 of the 14-day plan in `docs/PLAN.md`) ·
-**Branch:** main · **Gate:** green, 296 tests, 0 skips (updated end of Day 8).
+**Branch:** main · **Gate:** green, 322 tests, 0 skips (updated Day 10).
 
 Read this, then `docs/MEMORY.md` (durable context + locked decisions) and
 `docs/reports/SPRINTS.md` (plan + risks). Deeper: `docs/ARCHITECTURE.md`,
@@ -18,7 +18,7 @@ cd C:\Users\User\Downloads\tool_validator
 ruff format . && ruff check . && mypy --strict toolvalidator data experiments && pytest -q
 ```
 
-Expect **296 passed**. If tests skip, something below is not running:
+Expect **322 passed**. If tests skip, something below is not running:
 
 | Needs | Check | If missing |
 |---|---|---|
@@ -46,24 +46,22 @@ results yet.** RQ1/RQ2 have pilot numbers only (200 entries; see STATUS §4).
 
 ## 3. Do this next, in this order
 
-*Updated 2026-09-24, end of Day 8.* Done since the first version of this file: S5b
-rubber-duck, the S6 signals + model (`scoring/`), the 25-test cap, 429 handling in the
-client. **Blocked on Sohaib's decisions (a)–(c) below** before the LLM experiments run.
+*Updated 2026-09-26 (Day 10).* Decisions (a)–(c) are made (DECISIONS.md 2026-09-26). The
+judge is now `GLM-5.3-Flash`. Two long runs were launched at the end of Day 10:
 
-1. **Decide (a) the judge budget.** GLM-5.3 is throttled at 3,000 tokens / ~60 s on this key
-   (LLM.md §6); Tier 2 needs ~3.2k GLM tokens per tool at toy prompt size, ~6k with
-   real statement lengths (both estimates: 8 judge calls + 1 compare, measured n=1 each). Options: batch-judge a suite in one call (new prompt version), switch the judge to
-   `GLM-5.3-Flash`/`DeepSeek-V4.1-Flash` (10,000/window), shrink Tier 2, or ask SCADS for more.
-2. **Decide (b) tests per tool or per entry** for RQ3: generate per tool (the generator sees
-   each variant's code) or once per entry, blind, shared by buggy and fixed (paired, half the cost).
-3. **Decide (c) the RQ1/RQ2 headline**: all tests (slip 0.5%) or the 25-test cap (9.5%).
-   The runner defaults to the cap; pass `--max-tests 0` for all tests.
-4. Then **`experiments/run_testgen_strategies.py`** (RQ3; arms: statement examples, generator
-   only, generator + judge, S5b), writing per-tool records that
-   **`experiments/fit_reliability_score.py`** (RQ4) feeds to `scoring.model.evaluate`.
-5. **S6 stage** (`stages/s6_score.py`): mapping the score to ACCEPT / NEEDS_REVIEW changes
-   `pipeline.run_pipeline` — a contract change; ask first.
-6. **Tier 1 run** (2,000 entries), then **S5 mutation** and **S7 MCP schema** if time allows.
+| Run | Command | Output |
+|---|---|---|
+| RQ3 eval, 300 entries | `python -m experiments.run_testgen_strategies --set eval --workers 4 --out results/rq3` | `results/rq3/testgen_eval.jsonl` + `.summary.json`; trace in `results/rq3/rq3-eval/` |
+| Tier 1 RQ1/RQ2, 2,000 entries, all tests | `python -m experiments.run_static_vs_dynamic --n 2000 --max-tests 0 --workers 6 --out results/tier1` | `results/tier1/static_vs_dynamic.*` |
+
+1. **If the RQ3 run was interrupted, rerun the same command**: finished entries are skipped.
+   Entries listed under `errors` in the summary are retried by a rerun too.
+2. **RQ4:** `python -m experiments.fit_reliability_score --rows results/rq3/testgen_eval.jsonl --out results/rq4/score_eval.json`.
+3. Write the RQ3/RQ4 results into STATUS.md and PROJECT_LOG.md §7 (dev-set numbers are
+   never reported). Tier 1 timings ran alongside RQ3, so its s/tool is inflated; say so.
+4. **S6 stage** (approved): needs the final fitted model saved (coefficients + scaling);
+   `scoring/model.py` is already over the size guideline — ask before adding `scoring/metrics.py`.
+5. S5 mutation and S7 MCP schema (RQ5) if time allows.
 
 The approved LangGraph plan is at `C:\Users\User\.claude\plans\ok-one-thing-is-sunny-hopcroft.md`.
 Steps 0-3 are done (langgraph pinned, tracing, replay, prompt registry). Remaining:
