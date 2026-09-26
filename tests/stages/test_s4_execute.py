@@ -433,3 +433,31 @@ def test_real_typed_tool_that_raises_is_a_crash(sandbox: DockerSandbox) -> None:
     res = s4_execute.run(_tool(boom), record, sandbox, tests=_TYPED_TESTS)
     assert res.category == "crash"
     assert "ValueError" in json.dumps(res.data["failures"])
+
+
+@pytest.mark.slow
+def test_real_tool_printing_more_than_the_reply_does_not_corrupt_it(
+    sandbox: DockerSandbox,
+) -> None:
+    # Regression (2026-09-26, RQ3 dev entry 289618): the harness wrote each test's output
+    # to the same "out" file the runner uses for the harness's own reply, so a tool that
+    # printed more than the reply left its tail after the JSON.
+    chatty = "n = int(input())\nfor i in range(n):\n    print(i)\n"
+    res = _run(chatty, [IOExample(input="20000", output="0")], sandbox)
+    assert res.category == "wrong_output"
+    assert res.data["pass_rate"] == 0.0
+
+
+@pytest.mark.slow
+def test_real_typed_tool_printing_a_lot_does_not_corrupt_the_reply(
+    sandbox: DockerSandbox,
+) -> None:
+    noisy = (
+        "def celsius_to_fahrenheit(celsius):\n"
+        "    for i in range(20000):\n"
+        "        print(i)\n"
+        "    return {'fahrenheit': celsius * 9 / 5 + 32}\n"
+    )
+    record = ValidationRecord(request=_TYPED_REQUEST)
+    res = s4_execute.run(_tool(noisy), record, sandbox, tests=_TYPED_TESTS)
+    assert res.passed

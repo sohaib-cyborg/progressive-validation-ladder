@@ -58,6 +58,8 @@ def _close(got: str, want: str, rel_tol: float, abs_tol: float) -> bool:
     return math.isclose(got_value, want_value, rel_tol=rel_tol, abs_tol=abs_tol)
 
 
+# Per-test files are case.out/case.err: the sandbox runner keeps the harness's own
+# stdout/stderr in out/err in the same directory, and sharing names corrupted the reply.
 STDIN_HARNESS_MAIN = """
 payload = json.load(sys.stdin)
 cap = payload["max_output_bytes"]
@@ -72,7 +74,7 @@ def limit_output():
 
 results = []
 for index, case in enumerate(payload["tests"]):
-    with open("out", "wb") as out, open("err", "wb") as err:
+    with open("case.out", "wb") as out, open("case.err", "wb") as err:
         proc = subprocess.Popen(
             [sys.executable, "tool.py"], stdin=subprocess.PIPE, stdout=out, stderr=err,
             preexec_fn=limit_output,
@@ -84,9 +86,9 @@ for index, case in enumerate(payload["tests"]):
             proc.kill()
             proc.communicate()
             timed_out = True
-    with open("out", "rb") as handle:
+    with open("case.out", "rb") as handle:
         actual = handle.read(cap).decode("utf-8", "replace")
-    with open("err", "rb") as handle:
+    with open("case.err", "rb") as handle:
         stderr = handle.read(cap).decode("utf-8", "replace")
     returned = proc.returncode
     code = returned if returned is None or returned >= 0 else 128 - returned
@@ -165,7 +167,7 @@ def limit_output():
 
 results = []
 for index, case in enumerate(payload["tests"]):
-    with open("out", "wb") as out, open("err", "wb") as err:
+    with open("case.out", "wb") as out, open("case.err", "wb") as err:
         proc = subprocess.Popen(
             [sys.executable, "driver.py", str(index)], stdout=out, stderr=err,
             preexec_fn=limit_output,
@@ -177,9 +179,9 @@ for index, case in enumerate(payload["tests"]):
             proc.kill()
             proc.wait()
             timed_out = True
-    with open("out", "rb") as handle:
+    with open("case.out", "rb") as handle:
         raw = handle.read(cap).decode("utf-8", "replace")
-    with open("err", "rb") as handle:
+    with open("case.err", "rb") as handle:
         stderr = handle.read(cap).decode("utf-8", "replace")
     returned = proc.returncode
     code = returned if returned is None or returned >= 0 else 128 - returned
