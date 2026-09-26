@@ -491,3 +491,23 @@ before the tool). A `show_code=True` side arm is optional if time allows.
 **RQ1/RQ2 headline:** all dataset tests; the 25-test cap is reported as a sensitivity check.
 **S6:** the S6 stage may change `pipeline.run_pipeline` so the score maps to ACCEPT vs
 NEEDS_REVIEW (a pipeline-contract change, approved).
+
+## 2026-09-26 — Judge switched to GLM-5.3-Flash; completion tokens capped
+**Decision:** `SCADS_JUDGE_MODEL=zai-org/GLM-5.3-Flash` (was `zai-org/GLM-5.3`). Every call
+now sends `max_tokens = max_completion_tokens` (default 8,192); a reply cut off at the cap
+raises `LLMOutputError` instead of being parsed. In the RQ3 runner an unusable S5b reply
+keeps the entry: its execution arms are recorded and its semantic fields are `None` with
+`semantic_error` set (counted in the summary).
+**Why (measured):** the RQ3 smoke run (2 dev entries, 2 workers) on GLM-5.3 stalled for
+10+ minutes on one S5b comparison with no other GLM traffic: the 3,000-token window could
+not serve it. The same entry on Flash showed why — one comparison produced **11,860
+completion tokens** of reasoning (144 s), more than a whole Flash window. One complete
+entry on GLM-5.3 used ~3,950 judge tokens (batched judge + 2 comparisons).
+**Cost of the switch:** Flash is the same family as GLM-5.3, still different from the
+generator's (independence kept). Its size is not published to us, so Sohaib's "larger,
+stronger reasoner" requirement is **unverified** for Flash; stated as a limitation.
+`judge_test@v1` real test results before this date were produced with GLM-5.3.
+**Alternatives rejected:** DeepSeek-V4.1-Flash (same limit, third family); Llama-3.3-70B
+(older); gemma-4-26B (smaller than the generator); waiting out GLM-5.3 (a call that cannot
+fit its window never completes).
+

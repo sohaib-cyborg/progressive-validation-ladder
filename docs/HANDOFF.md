@@ -84,7 +84,7 @@ in that plan, and nothing outside `agents/` may import langgraph, so backing out
   Tier 2 (LLM/mutation) = 300 + a disjoint 50-entry dev set. A 25-test cap per program
   is implemented (`experiments/common.cap_tests`, Day 8); it moves the pilot slip rate
   from 0.5% to 9.5%, so both are reported (STATUS §4.1).
-- **Models pinned**: generator `Qwen/Qwen3.8-27B`, judge `zai-org/GLM-5.3` (different
+- **Models pinned**: generator `Qwen/Qwen3.8-27B`, judge `zai-org/GLM-5.3-Flash` since 2026-09-26 (different
   family, blind to the code). `alias-*` names are banned.
 - **mutmut produces no mutants for module-level code**, and ~86% of entries have no `def`,
   so arm A needs a documented script→function wrapping step.

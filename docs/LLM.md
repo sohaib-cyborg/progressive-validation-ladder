@@ -14,12 +14,14 @@ model id from settings:
 | Role | Model (pinned 2026-09-17) | Sees the tool's code? | Job |
 |---|---|---|---|
 | `generator` | `Qwen/Qwen3.8-27B` | yes, as an *interface* reference | proposes test cases |
-| `judge` | `zai-org/GLM-5.3` | **never** | decides whether one proposed test follows from the request |
+| `judge` | `zai-org/GLM-5.3-Flash` (since 2026-09-26; was `zai-org/GLM-5.3`) | **never** | judges proposed tests (S3), compares explanation to request (S5b) |
 
 Why these two: Sohaib's requirement was that the reviewer be a different model and a
 stronger reasoner. Public figures (not verified by us): Qwen3.8-27B ≈ 27.8B dense;
 GLM-5.3 ≈ 743B mixture-of-experts with ≈39B active per token, a reasoning model. So the
 judge differs in family and is larger on both counts.
+
+**Switched 2026-09-26 to `zai-org/GLM-5.3-Flash`** (DECISIONS.md): GLM-5.3's 3,000-token window could not serve one comparison at all. Same family, still different from the generator's; its size is not published to us, so whether it is larger or a stronger reasoner than the generator is **unverified**.
 
 **`alias-*` model names are banned.** SCADS serves them, but the API reports the alias
 back rather than the underlying model, so a result produced through one could not be

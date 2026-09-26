@@ -77,8 +77,9 @@ a report. Evaluated on the **RunBugRun** dataset, Python subset only.
 
 - **Generator:** `Qwen/Qwen3.8-27B` (pinned 2026-09-17; Qwen3-Coder is no longer
   served by SCADS). Sees code as interface reference; treats the description as truth.
-- **Judge:** `zai-org/GLM-5.3` (pinned 2026-09-17). A *different family*, and larger
-  with stronger reasoning than the generator (Sohaib's requirement). Blind to the tool
+- **Judge:** `zai-org/GLM-5.3-Flash` (since 2026-09-26; `zai-org/GLM-5.3` pinned 2026-09-17
+  was too rate-limited to use). A *different family*; Sohaib's "larger, stronger"
+  requirement is **unverified** for Flash. Blind to the tool
   code. Decides if a generated test is valid. See DECISIONS.md.
 - Set via `SCADS_GENERATOR_MODEL` / `SCADS_JUDGE_MODEL` in `.env`. Never use
   `alias-*` model names (they hide the underlying model, so results aren't reproducible).

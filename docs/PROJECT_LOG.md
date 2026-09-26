@@ -161,7 +161,7 @@ tests (no leftover containers).
 | Role | Model (pinned) | Sees | Limit on this key (measured 2026-09-24) |
 |---|---|---|---|
 | generator (S3 tests, S5b explain) | `Qwen/Qwen3.8-27B` | request (+ code where allowed) | 120 req · 40,000 tokens / ~60 s |
-| judge (S3 judge, S5b compare) | `zai-org/GLM-5.3` | request + candidate, **never code** | **30 req · 3,000 tokens / ~60 s** |
+| judge (S3 judge, S5b compare) | `zai-org/GLM-5.3-Flash` since 09-26 (was `GLM-5.3`: 30 req · 3,000 tokens) | request + candidate, **never code** | 60 req · 10,000 tokens / ~60 s |
 
 - One client (`llm/scads_client.py`), temperature 0, defensive JSON parsing; waits for the
   stated reset on HTTP 429 (bounded, logged). `alias-*` model names are banned.

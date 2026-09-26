@@ -103,8 +103,9 @@ tests in one container call.
 ### 2.6 Models (pinned, not optimised)
 - **Generator:** `Qwen/Qwen3.8-27B` (~27.8B dense). May see the code as an *interface*
   reference, but the description is the specification.
-- **Judge:** `zai-org/GLM-5.3` (~743B MoE, ~39B active), a different family and a
-  stronger reasoner, **blind to the tool's code**. It judges tests, never tools.
+- **Judge:** `zai-org/GLM-5.3-Flash` since 2026-09-26 (was `zai-org/GLM-5.3`, ~743B MoE,
+  ~39B active), a different family from the generator, **blind to the tool's code**. It
+  judges tests, never tools. **Switched 2026-09-26 to `zai-org/GLM-5.3-Flash`** (DECISIONS.md): GLM-5.3's 3,000-token window could not serve one comparison at all. Same family, still different from the generator's; its size is not published to us, so whether it is larger or a stronger reasoner than the generator is **unverified**.
 - Model aliases (`alias-*`) are banned: the API reports the alias, not the model, so
   results would not be reproducible.
 
