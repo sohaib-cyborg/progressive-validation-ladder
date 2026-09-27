@@ -137,7 +137,7 @@ infrastructure rather than fakes.
 Running the typed-mode tests in a real container found two defects that unit tests with a
 fake sandbox could not: the injected comparison function needed `from typing import Any`,
 without which **function mode raised NameError on every call**, and failure previews kept
-the head of stderr instead of the tail, hiding the exception type. Both fixed in `b919d5f`.
+the head of stderr instead of the tail, hiding the exception type. Both fixed in `f05b9bd`.
 
 | Area | Tests | Of which real infrastructure |
 |---|---|---|

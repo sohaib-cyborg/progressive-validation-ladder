@@ -32,10 +32,10 @@ Rules that have already paid for themselves:
 - **Test first, and watch it fail.** A test that passes before the code exists is testing
   nothing. Seeing the failure message is the check.
 - **The gate gates the commit.** Once, a commit went in while the gate was red
-  (`8b3b520`, fixed in `25fdae4`); the failure had been masking mypy silently not
+  (`fc71208`, fixed in `c5225f0`); the failure had been masking mypy silently not
   checking `data/`, which was in turn hiding a real typing bug.
 - **Refactor and feature never share a commit.** Splitting `s4_execute` and adding the
-  typed mode were `d983994` and `5a8c73c`.
+  typed mode were `05c761f` and `16c5265`.
 - **Ask before the spine moves.** Changing `CapabilityRequest`, adding a dependency, or
   creating a new top-level module is a question, not a decision.
 - **Infrastructure failures raise; they never become verdicts.** A bandit crash, a

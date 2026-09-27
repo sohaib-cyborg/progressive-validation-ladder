@@ -63,8 +63,8 @@ $ pytest -q          → exit 5 (no tests collected; accepted for this commit, s
 **Decisions:** progress reports folder; Python 3.12 venv; package discovery; probes
 excluded from ruff; wider gate; mutmut in sandbox; pytest exit 5 on skeleton; test
 subfolders are packages.
-**Commit:** `06f3bcd chore: project skeleton`, `3c791c5 docs: widen mypy gate to data and experiments`,
-`d1d4a83 docs: add reports folder, sprint plan, and Day 1 decisions`
+**Commit:** `2baab8f chore: project skeleton`, `a644775 docs: widen mypy gate to data and experiments`,
+`9733f56 docs: add reports folder, sprint plan, and Day 1 decisions`
 **Open issues / next:**
 - The mypy "unused section(s)" note is expected until docker/mutmut/bandit/sklearn are
   imported. It is a note, not an error (exit 0).
@@ -90,7 +90,7 @@ Success: no issues found in 10 source files
 gate exit=0
 ```
 **Decisions:** DECISIONS.md "Contract shapes (contracts.py)".
-**Commit:** `0fdefa3 contracts: add pipeline spine types`
+**Commit:** `c74b338 contracts: add pipeline spine types`
 
 ---
 
@@ -116,7 +116,7 @@ keys in .env: ['SCADS_API_KEY', 'SCADS_BASE_URL']
 api_key set: True | base_url: https://llm.scads.ai/v1 | generator_model: None | judge_model: None
 ```
 **Decisions:** DECISIONS.md "Config: no invented defaults, no new dependency".
-**Commit:** `895d87f config: load settings from environment and .env`
+**Commit:** `d02becc config: load settings from environment and .env`
 **Open issues / next:**
 - SCADS model IDs are not set in `.env`. Needed before Sprint 2 (task 2.1), not before.
 
@@ -134,7 +134,7 @@ $ docker version   → client 29.6.1; "failed to connect to the docker API ... d
 $ <gate>  → 30 files left unchanged / All checks passed! / Success: no issues found in 11 source files / 30 passed, gate exit=0
 ```
 **Decisions:** DECISIONS.md "Sandbox is a Protocol in contracts.py".
-**Commit:** `37c034c contracts: add Sandbox protocol, ExecResult, and Stage type`
+**Commit:** `ab626df contracts: add Sandbox protocol, ExecResult, and Stage type`
 
 ---
 
@@ -157,7 +157,7 @@ $ <gate, 1st>  → s1_parse.py:28: error: Argument "data" to "StageResult" has i
 $ <gate, 2nd>  → Success: no issues found in 12 source files / 38 passed, gate exit=0
 ```
 **Decisions:** DECISIONS.md "S1 parse: parser overflow is a failure; empty code passes".
-**Commit:** `b9ff485 stages: add S1 parse`
+**Commit:** `9bcc1a5 stages: add S1 parse`
 **Open issues:** an empty tool passes S1 (and is ACCEPTED by static-only config).
 
 ---
@@ -193,8 +193,8 @@ $ <gate>  → Success: no issues found in 13 source files / 52 passed, gate exit
   slowest: 1.66s test_clean_code_passes (cold mypy cache), others ~0.5s
 ```
 **Decisions:** DECISIONS.md "S2 static: bandit threshold, mypy mode, how analyzers run".
-**Commit:** `ff6b5a8 config: add configurable bandit reject severity`,
-`48a9351 stages: add S2 static (bandit gate + mypy soft signal)`
+**Commit:** `959b7c6 config: add configurable bandit reject severity`,
+`7fd54e9 stages: add S2 static (bandit gate + mypy soft signal)`
 
 ---
 
@@ -210,8 +210,8 @@ $ <gate> (repair)   → Success: no issues found in 14 source files / 56 passed,
 $ <gate> (pipeline) → Success: no issues found in 15 source files / 64 passed, gate exit=0
 ```
 **Decisions:** DECISIONS.md "Minimal repair.py pulled forward", "Pipeline semantics before S6".
-**Commit:** `ac6c2e8 repair: build FailureReport from a failed StageResult`,
-`509da24 pipeline: add stage runner with short-circuit to REJECT`
+**Commit:** `fc8f03f repair: build FailureReport from a failed StageResult`,
+`1e2f394 pipeline: add stage runner with short-circuit to REJECT`
 
 ---
 
@@ -235,8 +235,8 @@ $ python -m toolvalidator.cli validate --tool examples/broken_celsius.py --reque
 exit=0      ← expected: static-only checks cannot see the logic bug (RQ2)
 ```
 **Decisions:** DECISIONS.md "NoExecutionSandbox for static-only runs", "CLI contract and smoke examples".
-**Commit:** `77158bd sandbox: add NoExecutionSandbox for static-only runs`,
-`3573a6f cli: add validate command and smoke examples`
+**Commit:** `748e61d sandbox: add NoExecutionSandbox for static-only runs`,
+`5f1be0f cli: add validate command and smoke examples`
 
 ---
 
@@ -332,7 +332,7 @@ $ tests_all output endings
 {'total': 321418, 'ends with \n': 304310, 'ends with space/tab': 1008, 'contains \r': 0, 'empty': 8}
 ```
 **Decisions:** DECISIONS.md "RunBugRun loader behaviour".
-**Commit:** `eae235e data: RunBugRun Python loader`
+**Commit:** `fa593ca data: RunBugRun Python loader`
 
 ---
 
@@ -371,8 +371,8 @@ $ docker ps -a --filter label=toolvalidator=sandbox → leftover sandbox contain
 ```
 **Decisions:** DECISIONS.md "Sandbox execution design", "Real-Docker tests skip (visibly)",
 "OPEN: sandbox image lacks numpy".
-**Commit:** `817fa93 config: add sandbox max_output_bytes`, `c3bf326 sandbox: provision and
-destroy the locked-down container`, `c909d58 sandbox: run scripts in the container with timeout
+**Commit:** `166225e config: add sandbox max_output_bytes`, `da96ca4 sandbox: provision and
+destroy the locked-down container`, `a2fcfac sandbox: run scripts in the container with timeout
 and output caps`
 
 ---

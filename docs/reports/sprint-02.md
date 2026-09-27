@@ -38,7 +38,7 @@ $ <gate> → Success: no issues found in 19 source files / 97 passed, 0 skipped 
 <sandbox flags> = `--rm --network none --memory 512m --memory-swap 512m --pids-limit 128 --cap-drop ALL --security-opt no-new-privileges --user 65534:65534`
 **Decisions:** DECISIONS.md "Sandbox image", "mutmut verified in the sandbox; module-level
 scripts yield no mutants", "Experiment scale: seeded subsets + parallel sandboxes".
-**Commit:** `29cf054 sandbox: add pinned sandbox image with numpy and mutmut`
+**Commit:** `0c055d8 sandbox: add pinned sandbox image with numpy and mutmut`
 **Open issues / next:** Docker Desktop memory is 1.9 GiB, so 3 parallel sandboxes (Sohaib to raise
 it to 8 GB). Next task: 2.1 LLM client.
 
@@ -64,7 +64,7 @@ judge zai-org/GLM-5.3 6.0s completion_tokens= 35 reasoning chars= 138 content= '
 ```
 **Finding:** SCADS latency varies a lot (the same two trivial calls took 53 s once, 8 s later).
 Tier 2 LLM cost must be measured on real prompts before fixing its size.
-**Commit:** `b441c3b llm: add SCADS client with role-pinned models and defensive JSON parsing`
+**Commit:** `8bf7bd8 llm: add SCADS client with role-pinned models and defensive JSON parsing`
 
 ---
 
@@ -79,7 +79,7 @@ plus short previews. Categories: timeout > crash > wrong_output; `no_tests` when
 $ <gate> → Success: no issues found in 21 source files / 136 passed
   real-Docker: 50 tests in one call in 1.32s (~26 ms/test) vs ~300 ms per separate sandbox call
 ```
-**Commit:** `4a831eb stages: add S4 execute (all tests in one sandbox call)`
+**Commit:** `6f17625 stages: add S4 execute (all tests in one sandbox call)`
 
 ---
 
@@ -109,8 +109,8 @@ median tests per tool: 102
   dataset label noise, not a validator failure.
 **Fix + rerun:** float-tolerant token comparison (`math.isclose`, rel/abs 1e-6) and a 10 s
 per-test timeout, both `ExecutionSettings`. Rerun of the same 200 entries in progress.
-**Commits:** `8b3b520` + `25fdae4` (plumbing; 8b3b520 was committed against a failing gate by
-mistake, fixed in 25fdae4), `0c7916d` (runner), `8861507` (float tolerance + 10 s timeout)
+**Commits:** `fc71208` + `c5225f0` (plumbing; fc71208 was committed against a failing gate by
+mistake, fixed in c5225f0), `ff25dd9` (runner), `b437931` (float tolerance + 10 s timeout)
 **Caveat:** these are pilot numbers on 200 of 11,665 held-out entries, and the execution arm
 uses the dataset's own tests (the best case). Generated-test arms come in RQ3.
 
@@ -136,7 +136,7 @@ run 3 (tolerance fractional): slip 1/200 = 0.005 · false-reject 4/200 = 0.020 �
 ```
 **Decisions:** DECISIONS.md entry to follow in the next docs commit; rule implemented in
 `stages/s4_execute.outputs_match`.
-**Commit:** `8861507` (tolerance + 10 s), `886a2cc` (tolerance only for fractional answers)
+**Commit:** `b437931` (tolerance + 10 s), `7e19625` (tolerance only for fractional answers)
 
 ---
 
@@ -170,8 +170,8 @@ $ <gate> → All checks passed! / Success: no issues found in 35 source files / 
   six new typed-mode tests → function mode is NOT yet verified in a container.
 ```
 **Decisions:** DECISIONS.md 2026-09-23 (schema, typed mode, prompt registry).
-**Commits:** `bd29a99` langgraph · `5d6ff77` trace · `fb57cc8` replay ·
-`02b591f` schema · `d983994` split · `5a8c73c` typed mode · `15c9589` prompt registry
+**Commits:** `0817102` langgraph · `96a01a3` trace · `c2b724e` replay ·
+`b34dbc5` schema · `05c761f` split · `16c5265` typed mode · `d556fd2` prompt registry
 **Open / next:** start Docker and run the 22 skipped tests (typed mode verification);
 then S5b rubber-duck, S6 score and the RQ3/RQ4 experiments.
 
@@ -196,5 +196,5 @@ assert 'crash' == 'no_entrypoint' → my test was wrong: a module with ONE publi
 $ <gate> → All checks passed! / Success: no issues found in 35 source files / 258 passed
 $ docker ps -a --filter label=toolvalidator=sandbox → leftover containers: 0
 ```
-**Commit:** `b919d5f stages: fix typed harness in-container failures found by real Docker runs`
+**Commit:** `f05b9bd stages: fix typed harness in-container failures found by real Docker runs`
 **Lesson for the report:** a sandbox harness cannot be validated with a fake sandbox.
