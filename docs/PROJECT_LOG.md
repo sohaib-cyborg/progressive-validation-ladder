@@ -74,7 +74,7 @@ data/loaders/      RunBugRun + CodeNet → requests, tests, examples, labels
 experiments/       what you run                 sampling, parallel runs, metrics, results
 ```
 
-Invariants, each enforced by tests:
+Invariants — rules that must hold at all times, however the code changes (1–4 are enforced by tests):
 1. **The verdict is deterministic.** LLMs only *propose* (tests, explanations). S3 and S5b
    always pass; they record signals, never decide (CLAUDE.md rule 5).
 2. **Tool code runs only in the container.** S1/S2 read source on the host; anything that
@@ -83,6 +83,7 @@ Invariants, each enforced by tests:
    harness error, unusable LLM output, persistent rate limit).
 4. **Missing is missing.** A signal that was not produced is `None`, never a guessed 0 or 1.
 5. **Only `agents/` may import langgraph** (planned layer, not built), so it is cheap to drop.
+   *No test enforces this yet;* it holds today because nothing imports langgraph at all.
 
 ### 3.2 How one tool is validated
 
