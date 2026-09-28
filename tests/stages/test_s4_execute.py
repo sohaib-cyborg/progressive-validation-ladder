@@ -154,6 +154,39 @@ def test_broken_harness_output_raises(record: ValidationRecord) -> None:
         s4_execute.run(_tool(), record, sandbox, tests=TESTS)
 
 
+# --- run_cases: every per-test outcome, not only the first failures ---------------
+
+
+def test_run_cases_returns_every_outcome_beyond_the_reported_failures() -> None:
+    cases = [IOExample(input=str(i), output=str(i + 1)) for i in range(8)]
+    sandbox = _sandbox_returning([_result(i, passed=i == 0) for i in range(8)])
+    run = s4_execute.run_cases(ADD_ONE, _REQUEST, cases, sandbox)
+    assert not run.timed_out
+    assert [o.passed for o in run.outcomes] == [True] + [False] * 7
+    assert [o.index for o in run.outcomes] == list(range(8))
+
+
+def test_run_cases_sends_the_given_code(record: ValidationRecord) -> None:
+    sandbox = _sandbox_returning([_result(0), _result(1)])
+    s4_execute.run_cases("print(0)", record.request, TESTS, sandbox)
+    assert json.loads(sandbox.calls[0][1])["code"] == "print(0)"
+
+
+def test_run_cases_reports_the_overall_timeout_with_no_outcomes() -> None:
+    sandbox = FakeSandbox(
+        ExecResult(stdout="", stderr="", exit_code=137, duration_s=9.0, timed_out=True)
+    )
+    run = s4_execute.run_cases(ADD_ONE, _REQUEST, TESTS, sandbox)
+    assert run.timed_out
+    assert run.outcomes == []
+
+
+def test_run_cases_raises_on_a_broken_harness() -> None:
+    sandbox = FakeSandbox(ExecResult(stdout="", stderr="boom", exit_code=1, duration_s=0.1))
+    with pytest.raises(HarnessError):
+        s4_execute.run_cases(ADD_ONE, _REQUEST, TESTS, sandbox)
+
+
 # --- real Docker -----------------------------------------------------------------
 
 
@@ -212,6 +245,15 @@ def test_real_many_tests_in_one_sandbox_call(sandbox: DockerSandbox) -> None:
     res = _run(ADD_ONE, many, sandbox)
     assert res.passed
     assert res.data["total"] == 50
+
+
+@pytest.mark.slow
+def test_real_run_cases_lists_every_test_in_order(sandbox: DockerSandbox) -> None:
+    # Only input 0 is answered right by "print 1"; seven failures exceed the stage's report cap.
+    cases = [IOExample(input=str(i), output=str(i + 1)) for i in range(8)]
+    run = s4_execute.run_cases("input()\nprint(1)", _REQUEST, cases, sandbox)
+    assert [o.index for o in run.outcomes] == list(range(8))
+    assert [o.passed for o in run.outcomes] == [True] + [False] * 7
 
 
 # --- float-tolerant comparison ---------------------------------------------------

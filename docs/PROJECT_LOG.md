@@ -5,8 +5,13 @@ Dresden). This file is the single place to see **what exists, how it fits togeth
 what happened when, what was decided, and what the numbers are**. It summarises and
 links; the detailed sources are listed in §9.
 
-**Last updated:** 2026-09-26 (Day 10 of the 14-day plan in `PLAN.md`) · branch `main` ·
-gate green: **323 tests, 0 skipped** (end of Day 10 work).
+**Last updated:** 2026-09-28 (Day 12 of the 14-day plan in `PLAN.md`) · branch `main` ·
+gate green: **328 tests, 0 skipped**.
+
+**Stage names used below:** S1 **syntax check** · S2 **static analysis** (bandit + mypy) ·
+S3 **test generation** (LLM writes tests from the task) · S4 **test run** (in the sandbox) ·
+S5 **mutation** (how strong the tests are; not built) · S5b **rubber-duck** (one LLM explains
+the code, another checks it against the task) · S6 **score** · S7 **MCP schema** (not built).
 
 > Rule for this file: every number comes from a real run and says where it came from;
 > anything estimated says "estimate". Append to §5 (timeline) and §7 (results) as work
@@ -300,6 +305,32 @@ split S4 into stage + `harness.py` + `compare.py`; **typed function-call mode**;
   fallback, then adopted); **RQ3 tests once per entry, blind to code, shared by buggy and
   fixed**; RQ1/RQ2 headline = all tests, cap as sensitivity; S6 may change the verdict mapping.
 
+### Days 11–12 — 2026-09-27/28 · history clean-up, explanations, mutation plan
+- At Sohaib's request, removed the `Co-Authored-By: Claude` line from all 72 commit messages
+  (local history only; code unchanged; docs' commit hashes updated; backup branch kept).
+- Clarified in this log what the invariants are; the langgraph rule has no test yet.
+- Confirmed the RQ3 experiment already runs every strategy on every tool in parallel; the
+  §3.2 diagram shows the production pipeline, not the experiment.
+- Wrote the plan for **mutation (Arm A operator mutants, Arm B LLM mutants)** and **one
+  side-by-side comparison of every strategy** on 100 RQ3 entries — awaiting Sohaib's review.
+- New working agreements: Sohaib makes all commits; no AI attribution (HANDOFF §0).
+- Sohaib said "implement" (2026-09-28). Defaults taken on the three open points: Arm A uses
+  our own `ast` engine with mutmut's operator classes (deviation from locked decision 3, to be
+  recorded in DECISIONS.md); new files `prompts/mutation.py`, `experiments/run_mutation_arms.py`,
+  `experiments/compare_strategies.py` get added to STRUCTURE.md; the mutation stage stays out of
+  `pipeline.py` for now (experiment only).
+- **Step 1 (refactor, no behaviour change):** the test run gained `run_cases(code, request,
+  cases, sandbox)`, which returns **every** test's pass/fail (`CasesRun`), because the stage
+  result lists at most 5 failures and kill counting needs all of them. `run` now calls it.
+  +5 tests (1 real Docker: 8 tests, 7 failing, all listed in order). Gate: 328 passed, 0 skipped.
+- **Step 2: Arm A mutant maker** (`mutation/arm_a_mutmut.py`, 177 lines; `Mutant`/`MutantSet`
+  in `mutation/__init__.py`). mutmut's operator classes on an `ast` engine, source only; ≤ 20
+  mutants per tool in a seeded order; unparsable/unchanged/duplicate dropped and counted.
+  Example: `if a < b:` → mutant `if a <= b:`, described `line 1: < -> <=`. +34 tests.
+  Probe (not a result): 200 real `fixed` programs → 2,305 mutants (median 10.5, max 20),
+  0 dropped, 2 programs with nothing to mutate. Decision recorded in DECISIONS.md;
+  MEMORY locked decision 3 updated. Gate: 362 passed, 0 skipped.
+
 ---
 
 ## 6. Decisions (index — full rationale in `DECISIONS.md`)
@@ -326,6 +357,7 @@ split S4 into stage + `harness.py` + `compare.py`; **typed function-call mode**;
 | 09-26 | Judge → `GLM-5.3-Flash` (GLM-5.3 window could not serve one call); completion caps; truncation raises; S5b failure keeps the entry with semantics missing |
 | 09-26 | After the dev run: harness file-name fix, generator cap 16,384, failed-test indices per arm, `compare_explanation@v2` as default |
 | 09-26 | RQ4 reports named signal sets (joint ablation), not only drop-one ablation |
+| 09-28 | Mutation arm A = mutmut's operators on our own `ast` engine (supersedes "mutmut in the sandbox"); mutation measures test strength, never rejects; 100-entry subset |
 
 ---
 
@@ -376,15 +408,16 @@ Correct `max` program: 4 met, 0 violated (score 1.0). `min`-for-`max` bug: 3 met
 
 ## 8. Open items and known issues
 
-1. **Next:** RQ5 (S7 MCP schema) — the only RQ with no result; then S5 mutation (arm A needs a
-   script→function wrapping step); then the S6 stage (needs a saved fitted model; the clean
-   split wants a new `scoring/metrics.py`, not yet approved).
+1. **Next:** after Sohaib reviews it, implement the mutation + strategy-comparison plan
+   (`C:/Users/User/.claude/plans/generator-proposes-n-tests-snug-gem.md`, summarised in HANDOFF §3); then the S6 score stage (the `scoring/metrics.py`
+   split needs approval); then RQ5 (S7 MCP schema), the only RQ with no result.
 2. **RQ3 caveats to carry into the report:** 26/300 entries lost to LLM failures (likely
    the harder problems); S5b signal missing for 16.6% of tools, more for buggy (62) than
    fixed (29), so part of S5b's RQ4 gain may be that missingness; generated suites copy the
    statement samples (arm overlap); the Flash judge's strength vs the generator is unverified.
 3. **Judge budget and runaway reasoning** remain the binding LLM constraints (§3.7).
-4. Five files over the size guideline (§3.10).
+4. Six files over the size guideline (§3.10), now including `stages/s4_execute.py` (250 lines
+   after the `run_cases` refactor, was 193).
 5. 3 correct programs are too slow for a 10 s per-test limit; 1 expected output looks
    malformed upstream (entry 26394).
 6. Planned `agents/` (LangGraph) layer not built; cut first if the schedule bites.

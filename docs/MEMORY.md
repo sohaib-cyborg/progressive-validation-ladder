@@ -42,8 +42,9 @@ a report. Evaluated on the **RunBugRun** dataset, Python subset only.
    Human-written bugs are used as a *proxy* for synthesized-tool errors — this is
    flagged honestly in the report. (QuixBugs optional as an early smoke test.)
 3. **All three research components are IN scope:** mutation testing (two arms:
-   real mutmut + LLM-invented), rubber-duck semantic checking, MCP schema
-   generation. None are cut.
+   mutmut's operators + LLM-invented), rubber-duck semantic checking, MCP schema
+   generation. None are cut. *(2026-09-28: arm A applies mutmut's operator classes on
+   our own `ast` engine, not the mutmut binary — see DECISIONS.md.)*
 4. **Static checks are minimal on purpose:** bandit (dangerous calls) + mypy
    (types) only. They are the cheap baseline the dynamic checks are compared
    against. Secrets/pip-audit/allowlist are explicitly OUT (future work).
@@ -127,6 +128,8 @@ a report. Evaluated on the **RunBugRun** dataset, Python subset only.
   snippets. This makes `mutation/arm_a_mutmut.py` a subprocess orchestrator.
   **Update 2026-09-17:** that subprocess runs *inside the sandbox container*, not on
   the host (it executes tool code). See DECISIONS.md.
+  **Superseded 2026-09-28:** arm A no longer drives mutmut; it applies mutmut's operators
+  with an `ast` engine on the host (source only), and mutants run in the sandbox.
 - **bandit severities are not what you'd guess** (bandit 1.9.4, measured): `eval`,
   `exec`, `pickle.loads` = MEDIUM; `os.system(var)`, `shell=True` with a variable,
   `hashlib.md5` = HIGH; `__import__("os").popen` = not flagged. S2 rejects at HIGH
@@ -238,4 +241,13 @@ Status (fill in after running):
 - **Runs finished (Day 10 evening):** Tier 1 (1,999 entries): execution slip 0.35%, FR 1.5%;
   RQ3 eval (274/300): generated tests catch 89.8% vs samples 74.5%; RQ4 AUC 0.966
   (without S5b 0.927). Written into STATUS §4.5–4.7. Next: RQ5 (S7), S5 mutation, S6 stage.
+
+### Days 11–12 (2026-09-27/28) — history clean-up, explanations, mutation plan
+- All `Co-Authored-By: Claude` lines removed from history (72 local commits rewritten; only
+  the first commit was ever pushed). Docs' commit hashes updated. Backup branch
+  `backup/before-coauthor-removal`.
+- **New working agreements:** Claude never commits (Sohaib does); no AI attribution; wait for
+  "implement" after a plan; explain with plain stage names and examples (HANDOFF §0).
+- Plan for mutation arms + a side-by-side comparison of every strategy written, awaiting
+  review: `C:/Users/User/.claude/plans/generator-proposes-n-tests-snug-gem.md`.
 

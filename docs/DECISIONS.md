@@ -530,3 +530,27 @@ S5b comparisons truncated. Changes made before the eval run, each from that evid
 accepted 160/160 tests in the first 20 entries, so `judged` = `generated` there; the
 blind generator copies the statement's own samples because CodeNet descriptions contain
 them, so `generated` overlaps `examples`.
+
+
+## 2026-09-28 — Mutation arm A: mutmut's operators on our own `ast` engine
+**Decision:** `mutation/arm_a_mutmut.py` applies mutmut's operator classes (comparison
+swaps, arithmetic swaps, number + 1, `True`/`False`, strings wrapped in `XX`,
+`and`/`or`, `not`/unary minus removed, `break`/`continue`) with its own `ast`
+source-to-source engine on the host, instead of running the `mutmut` binary. It never
+executes code; mutants run only in the sandbox (kill counting). Up to 20 mutants per
+tool, candidates tried in a seeded order; unparsable, unchanged or duplicate mutants are
+dropped and counted. Docstrings and f-string text are not mutated.
+**Why:** mutmut 3 makes 0 mutants for module-level code (verified 2026-09-17), and 86% of
+RunBugRun programs are scripts without a `def`; it also expects pytest tests, while our
+tests are stdin/stdout cases. Wrapping every script in `def main()` and writing a pytest
+adapter per test would add two transformations of our own anyway, and run slower.
+**This supersedes** the 2026-09-17 entry "Mutation arm A (mutmut) runs inside the
+sandbox" and changes MEMORY locked decision 3 ("real mutmut") to "mutmut's operators".
+Sohaib approved the plan with this default on 2026-09-28.
+**Evidence (probe, not a result):** on the first 200 `fixed` programs of `python_valid0`
+it made 2,305 mutants (median 10.5 per program, max 20), 0 unparsable, 0 dropped; 2
+programs had no place any rule applies. Most common: arithmetic 846, number 807,
+comparison 288, string 241.
+**Caveats for the report:** raw mutation score, not adjusted for equivalent mutants (every
+strategy faces the same mutants, so comparisons stay fair); some mutants fail trivially
+(e.g. `str + str` -> `str - str` raises TypeError), exactly as mutmut's would.

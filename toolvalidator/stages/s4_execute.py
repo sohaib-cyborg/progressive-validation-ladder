@@ -38,12 +38,15 @@ from toolvalidator.stages.harness import (
 )
 
 __all__ = [
+    "CasesRun",
     "ExecutionMode",
     "HarnessError",
+    "TestOutcome",
     "execution_mode",
     "normalize_output",
     "outputs_match",
     "run",
+    "run_cases",
     "tests_from_record",
 ]
 
@@ -66,8 +69,11 @@ class HarnessError(RuntimeError):
     """The in-sandbox harness failed: our bug, not a verdict on the tool."""
 
 
-class _TestOutcome(BaseModel):
+class TestOutcome(BaseModel):
+    """One test's result as the in-sandbox harness reports it."""
+
     model_config = ConfigDict(frozen=True)
+    __test__ = False  # not a pytest class, despite the name
 
     index: int
     passed: bool
@@ -78,7 +84,18 @@ class _TestOutcome(BaseModel):
 
 
 class _HarnessReport(BaseModel):
-    results: list[_TestOutcome]
+    results: list[TestOutcome]
+
+
+class CasesRun(BaseModel):
+    """Every test's outcome for one program; empty when the whole call timed out."""
+
+    model_config = ConfigDict(frozen=True)
+
+    outcomes: list[TestOutcome]
+    timed_out: bool
+    overall_timeout_s: float
+    duration_s: float
 
 
 def execution_mode(request: CapabilityRequest) -> ExecutionMode:
@@ -108,11 +125,42 @@ def run(
         return record.add(
             StageResult(stage=STAGE, passed=False, category="no_tests", detail="no tests to run")
         )
+    run = run_cases(
+        artifact.code,
+        record.request,
+        cases,
+        sandbox,
+        timeout_s=timeout_s,
+        rel_tol=rel_tol,
+        abs_tol=abs_tol,
+        mode=mode,
+    )
+    if run.timed_out:
+        detail = f"harness exceeded the overall timeout of {run.overall_timeout_s:.0f}s"
+        return record.add(StageResult(stage=STAGE, passed=False, category="timeout", detail=detail))
+    return record.add(_stage_result(run.outcomes, len(cases), run.duration_s))
+
+
+def run_cases(
+    code: str,
+    request: CapabilityRequest,
+    cases: Sequence[IOExample],
+    sandbox: Sandbox,
+    *,
+    timeout_s: float | None = None,
+    rel_tol: float = DEFAULT_REL_TOL,
+    abs_tol: float = DEFAULT_ABS_TOL,
+    mode: ExecutionMode | None = None,
+) -> CasesRun:
+    """Run ``code`` against every case in one sandbox call and return each outcome.
+
+    ``run`` reports only the first failures; mutation kill counting needs them all.
+    """
     per_test = timeout_s if timeout_s is not None else DEFAULT_TEST_TIMEOUT_S
-    resolved = mode if mode is not None else execution_mode(record.request)
+    resolved = mode if mode is not None else execution_mode(request)
     common: dict[str, JsonValue] = {
         "mode": resolved,
-        "code": artifact.code,
+        "code": code,
         "timeout_s": per_test,
         "rel_tol": rel_tol,
         "abs_tol": abs_tol,
@@ -121,7 +169,7 @@ def run(
     }
     if resolved == "function":
         script = FUNCTION_HARNESS
-        common["entrypoint"] = record.request.name
+        common["entrypoint"] = request.name
         common["driver"] = FUNCTION_DRIVER
         common["tests"] = [{"input": t.input, "output": t.output} for t in cases]
     else:
@@ -133,15 +181,24 @@ def run(
     overall = per_test * len(cases) + HARNESS_OVERHEAD_S
     exec_result = sandbox.run(script, stdin=payload, timeout_s=overall)
     if exec_result.timed_out:
-        detail = f"harness exceeded the overall timeout of {overall:.0f}s"
-        return record.add(StageResult(stage=STAGE, passed=False, category="timeout", detail=detail))
+        return CasesRun(
+            outcomes=[],
+            timed_out=True,
+            overall_timeout_s=overall,
+            duration_s=exec_result.duration_s,
+        )
     if exec_result.exit_code != 0:
         raise HarnessError(f"harness exited {exec_result.exit_code}: {exec_result.stderr[-500:]}")
     try:
         report = _HarnessReport.model_validate_json(exec_result.stdout)
     except ValidationError as exc:
         raise HarnessError(f"unreadable harness output: {exec_result.stdout[:200]!r}") from exc
-    return record.add(_stage_result(report, len(cases), exec_result.duration_s))
+    return CasesRun(
+        outcomes=report.results,
+        timed_out=False,
+        overall_timeout_s=overall,
+        duration_s=exec_result.duration_s,
+    )
 
 
 def tests_from_record(record: ValidationRecord) -> list[IOExample]:
@@ -159,8 +216,8 @@ def tests_from_record(record: ValidationRecord) -> list[IOExample]:
     ]
 
 
-def _stage_result(report: _HarnessReport, total: int, duration_s: float) -> StageResult:
-    failures = [outcome for outcome in report.results if not outcome.passed]
+def _stage_result(outcomes: Sequence[TestOutcome], total: int, duration_s: float) -> StageResult:
+    failures = [outcome for outcome in outcomes if not outcome.passed]
     passed_count = total - len(failures)
     data: dict[str, JsonValue] = {
         "total": total,
@@ -178,7 +235,7 @@ def _stage_result(report: _HarnessReport, total: int, duration_s: float) -> Stag
     return StageResult(stage=STAGE, passed=False, category=category, detail=detail, data=data)
 
 
-def _category(failures: Sequence[_TestOutcome]) -> str:
+def _category(failures: Sequence[TestOutcome]) -> str:
     if all(NO_ENTRYPOINT_MARKER in f.stderr for f in failures):
         return "no_entrypoint"  # the tool never defined the requested function
     if any(f.timed_out for f in failures):

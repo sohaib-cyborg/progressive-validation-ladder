@@ -1,16 +1,32 @@
 # Handoff — start here in a new session
 
-**Written:** 2026-09-24 (Day 8 of the 14-day plan in `docs/PLAN.md`) ·
-**Branch:** main · **Gate:** green, 322 tests, 0 skips (updated Day 10).
+**Written:** 2026-09-28 (Day 12 of the 14-day plan in `docs/PLAN.md`) · **Branch:** main ·
+**Last commit:** `f4cea99` · **Gate:** green, **323 tests, 0 skips**.
 
-Read this, then `docs/MEMORY.md` (durable context + locked decisions) and
-`docs/reports/SPRINTS.md` (plan + risks). Deeper: `docs/ARCHITECTURE.md`,
-`docs/LLM.md`, `docs/PROMPTS.md`, `docs/WORKFLOW.md`,
-`docs/reports/STATUS.md` (results and caveats), `docs/DECISIONS.md` (why).
+Read, in order: this file → `docs/PROJECT_LOG.md` (one-file log: architecture, timeline,
+decisions, results) → `docs/MEMORY.md` (locked decisions + session log) →
+`docs/reports/STATUS.md` (results with caveats). Deeper: `DECISIONS.md`, `ARCHITECTURE.md`,
+`LLM.md`, `PROMPTS.md`, `WORKFLOW.md`.
 
 ---
 
-## 1. Verify the environment first (2 minutes)
+## 0. Working agreements with Sohaib (follow exactly)
+
+1. **Claude never commits.** No `git commit`, amend, rebase or any history change. After
+   each step, stop at a green gate and list the changed files plus a suggested
+   `<area>: <summary>` commit message. Sohaib commits.
+2. **No AI attribution anywhere** — no `Co-Authored-By`, no mention of Claude in commit
+   messages, PR text or docs. (All 72 old attribution lines were removed on 2026-09-27.)
+3. **Wait for "implement"** before building from a plan; Sohaib reviews plans first.
+4. **Explain in plain names with a concrete example**, not stage codes. Glossary:
+   S1 syntax check · S2 static analysis (bandit + mypy) · S3 test generation · S4 test run
+   in the sandbox · S5 mutation · S5b rubber-duck · S6 score · S7 MCP schema.
+5. **Keep `docs/PROJECT_LOG.md` complete** as work lands (§1 state, §3 architecture, §5
+   timeline, §6 decisions, §7 results, §8 open items) and re-read it fully before calling it
+   complete.
+6. Never invent a number; say "estimate" or "unverified" when it is one.
+
+## 1. Verify the environment first
 
 ```bash
 cd C:\Users\User\Downloads\tool_validator
@@ -18,74 +34,74 @@ cd C:\Users\User\Downloads\tool_validator
 ruff format . && ruff check . && mypy --strict toolvalidator data experiments && pytest -q
 ```
 
-Expect **322 passed**. If tests skip, something below is not running:
+Expect **323 passed, 0 skipped**. If tests skip, something below is not running:
 
 | Needs | Check | If missing |
 |---|---|---|
-| Docker Desktop | `docker version` | start it; 22 tests skip without it |
+| Docker Desktop | `docker version` | start it (`C:\Program Files\Docker\Docker\Docker Desktop.exe`); the real-Docker tests skip without it |
 | sandbox image | `docker images toolvalidator-sandbox:py3.12` | `docker build -t toolvalidator-sandbox:py3.12 toolvalidator/sandbox` |
-| dataset | `ls data/runbugrun_py/raw` | see §5 for the URLs (files are git-ignored) |
-| SCADS | `.env` has key + both model ids | 3 tests skip without it |
+| dataset | `ls data/runbugrun_py/raw` | see §5 (files are git-ignored) |
+| SCADS | `.env` has key + `SCADS_GENERATOR_MODEL=Qwen/Qwen3.8-27B`, `SCADS_JUDGE_MODEL=zai-org/GLM-5.3-Flash` | the real-LLM tests skip without it |
 
 A skip always prints its reason. **A skipped sandbox test is not a passing one.**
 
-## 2. What exists
+## 2. Where things stand
 
-Built and tested: contracts, config, pipeline, repair, CLI, S1 parse, S2 static
-(bandit + mypy), S3 test generation (generator + independent judge), S4 execute in the
-Docker sandbox **in two modes** (stdin/stdout and typed function call), the RunBugRun +
-CodeNet loader, the SCADS client with call tracing and offline replay, a versioned prompt
-registry, and the RQ1/RQ2 experiment runner.
+| Research question | State |
+|---|---|
+| RQ1/RQ2 static vs execution | ✅ Tier 1 (1,999 entries, all tests): static slip 100%, execution slip 0.35%, false rejection 1.5% |
+| RQ3 tests from the request | ✅ eval (274/300 entries): bugs caught — statement samples 74.5%, generated 89.8%, judged 88.7% |
+| RQ4 reliability score | ✅ out of fold: AUC 0.966, ρ 0.808, Brier 0.058; without rubber-duck 0.927 |
+| RQ5 MCP schema | ❌ not started |
 
-Since added (Day 8): S5b rubber-duck, `scoring/` (signals + grouped-CV model), the
-25-test cap, rate-limit waits in the client.
+Built: syntax check, static analysis, test generation (per-test or batched judge, prebuilt
+suites), test run (stdin + typed modes, real-Docker verified), rubber-duck
+(`compare_explanation@v2`), `scoring/` (signals + grouped-CV model), RQ1/RQ2, RQ3 and RQ4
+runners, LLM tracing + offline replay, prompt registry, completion caps, 429 waits.
+**Not built:** mutation (S5, both arms), the score *stage* (S6), MCP schema (S7), `agents/`.
 
-**Not built:** S5 mutation (both arms), the S6 *stage*, S7 MCP schema,
-`agents/`, `skills/`, and four of five experiment scripts. **RQ3, RQ4 and RQ5 have no
-results yet.** RQ1/RQ2 have pilot numbers only (200 entries; see STATUS §4).
+Results on disk (git-ignored): `results/tier1/`, `results/rq3/testgen_eval.*` + trace
+`results/rq3/rq3-eval/`, `results/rq4/score_eval.json`, pilots `results/pilot*`.
 
-## 3. Do this next, in this order
+## 3. Do this next
 
-*Updated 2026-09-26 (Day 10).* Decisions (a)–(c) are made (DECISIONS.md 2026-09-26). The
-judge is now `GLM-5.3-Flash`. Two long runs were launched at the end of Day 10:
+**The plan for mutation + the side-by-side strategy comparison is written and awaiting
+Sohaib's review:** `C:\Users\User\.claude\plans\generator-proposes-n-tests-snug-gem.md`.
+Do not start it until he says "implement". In short:
 
-| Run | Command | Output |
-|---|---|---|
-| RQ3 eval, 300 entries | `python -m experiments.run_testgen_strategies --set eval --workers 4 --out results/rq3` | `results/rq3/testgen_eval.jsonl` + `.summary.json`; trace in `results/rq3/rq3-eval/` |
-| Tier 1 RQ1/RQ2, 2,000 entries, all tests | `python -m experiments.run_static_vs_dynamic --n 2000 --max-tests 0 --workers 6 --out results/tier1` | `results/tier1/static_vs_dynamic.*` |
+- **Arm A** — operator-based mutants (mutmut's operator classes, own `ast` engine, because
+  mutmut 3 cannot mutate module-level scripts = 86% of programs); **Arm B** — LLM-invented
+  mutants (`invent_mutants@v1`, generator role, code only).
+- Mutation's role (agreed): **"mutants killed per strategy"** (test strength), an RQ4
+  signal, and Arm A vs Arm B agreement. Filtering tests by kills cannot change bug detection
+  (a killing test must pass on the tool), so it is not a detection arm.
+- On the **first 100 completed RQ3 eval entries**; suites **rebuilt offline** from the RQ3
+  trace with `ReplayClient` (no regeneration).
+- One comparison table, every strategy a row with the same columns (bugs caught, correct
+  tools rejected, mutation score A/B, tokens, seconds): statement samples · generated ·
+  judged · rubber-duck alone · judged ∪ rubber-duck. Then the conclusion, from the numbers.
+- Parallel strategies apply to the **experiment only**; the pipeline keeps "failed test →
+  REJECT" (Sohaib, 2026-09-28).
 
-1. **If the RQ3 run was interrupted, rerun the same command**: finished entries are skipped.
-   Entries listed under `errors` in the summary are retried by a rerun too.
-2. **RQ4:** `python -m experiments.fit_reliability_score --rows results/rq3/testgen_eval.jsonl --out results/rq4/score_eval.json`.
-3. Write the RQ3/RQ4 results into STATUS.md and PROJECT_LOG.md §7 (dev-set numbers are
-   never reported). Tier 1 timings ran alongside RQ3, so its s/tool is inflated; say so.
-4. **S6 stage** (approved): needs the final fitted model saved (coefficients + scaling);
-   `scoring/model.py` is already over the size guideline — ask before adding `scoring/metrics.py`.
-5. S5 mutation and S7 MCP schema (RQ5) if time allows.
-
-The approved LangGraph plan is at `C:\Users\User\.claude\plans\ok-one-thing-is-sunny-hopcroft.md`.
-Steps 0-3 are done (langgraph pinned, tracing, replay, prompt registry). Remaining:
-skills wrappers, bounded concurrency, the S3 graph, then the agents for the stages above.
-**If the schedule bites, cut the graphs and call the skills directly** — the cut order is
-in that plan, and nothing outside `agents/` may import langgraph, so backing out is cheap.
+After that: S6 score stage (approved; the `scoring/metrics.py` split needs approval), RQ5
+(S7), then writing (Days 13–14).
 
 ## 4. Decisions already made (don't relitigate; see DECISIONS.md)
 
-- **`CapabilityRequest` is Project B's schema verbatim** (`docs/capability_request.md`):
-  `name`, `capability`, `description`, typed `inputs`/`outputs`, `rationale`. Sample I/O
-  is **not** on the request; it lives on `RunBugRunEntry.examples`.
-- **Execution mode comes from the declared inputs**: only `stdin` → stdin/stdout program;
-  named typed parameters → import and call the entrypoint.
-- **Output comparison**: trailing whitespace ignored; numeric tolerance (1e-6) **only when
-  the expected value is fractional** — tolerating it everywhere hid 4 real int/float bugs.
-- **Experiment scale**: seeded subsets, ≤2 entries per problem. Tier 1 = 2,000 entries;
-  Tier 2 (LLM/mutation) = 300 + a disjoint 50-entry dev set. A 25-test cap per program
-  is implemented (`experiments/common.cap_tests`, Day 8); it moves the pilot slip rate
-  from 0.5% to 9.5%, so both are reported (STATUS §4.1).
-- **Models pinned**: generator `Qwen/Qwen3.8-27B`, judge `zai-org/GLM-5.3-Flash` since 2026-09-26 (different
-  family, blind to the code). `alias-*` names are banned.
-- **mutmut produces no mutants for module-level code**, and ~86% of entries have no `def`,
-  so arm A needs a documented script→function wrapping step.
+- **`CapabilityRequest` is Project B's schema verbatim**; sample I/O lives on
+  `RunBugRunEntry.examples`, not on the request.
+- **Execution mode comes from the declared inputs** (only `stdin` → stdin/stdout program).
+- **Output comparison**: trailing whitespace ignored; numeric tolerance only when the
+  expected value is fractional.
+- **Scale**: seeded, ≤ 2 entries per problem; Tier 1 = 2,000; Tier 2 = 300 eval + 50 dev
+  (dev never reported). A 25-test cap exists; the RQ1/RQ2 headline uses all tests.
+- **Models**: generator `Qwen/Qwen3.8-27B`, judge `zai-org/GLM-5.3-Flash` (since 2026-09-26;
+  GLM-5.3's 3,000-token window could not serve one call). Caps: judge 8,192, generator
+  16,384 completion tokens. `alias-*` names banned.
+- **RQ3 design**: one blind suite per entry (no code, no samples), batched judge, shared by
+  buggy and fixed.
+- **RQ4**: inputs never include the dataset's own tests; folds grouped by problem; missing →
+  indicator; report named signal sets (joint ablation).
 
 ## 5. Dataset (git-ignored, re-download if absent)
 
@@ -94,17 +110,17 @@ in that plan, and nothing outside `agents/` may import langgraph, so backing out
 `python_valid0.jsonl.gz`, `python_test0.jsonl.gz`, `tests_all.jsonl.gz`,
 `Manifest.json.gz`; plus problem statements from
 `https://raw.githubusercontent.com/IBM/Project_CodeNet/main/doc/problem_descriptions.tar.gz`.
-SHA-256 values are in `docs/reports/sprint-01.md` and `sprint-02.md`. The `train` split
-(3 files, ~16 MB) is **not** downloaded and is not needed unless the score fit wants it.
+SHA-256 values are in `docs/reports/sprint-01.md` and `sprint-02.md`.
 
-## 6. House rules that matter most
+## 6. House rules and known traps
 
-Test first and watch it fail · the gate gates the commit · refactor and feature never
-share a commit · ask before changing the spine, adding a dependency or creating a
-top-level module · infrastructure failures raise, they never become verdicts · tool code
-runs **only** in the container · never invent a number, and say when something is an
-estimate or unverified.
+Test first and watch it fail · full gate before handing over a step · refactor and feature
+never mixed in one step · ask before changing `contracts.py`, the pipeline contract, adding a
+dependency or a new top-level module · infrastructure failures raise, never verdicts · tool
+code runs **only** in the container · never invent a number.
 
-The last session proved the point: function mode passed its unit tests but was
-**completely broken in a container** (a missing `Any` import) until the real Docker tests
-ran. Run the real tests.
+Traps seen: a fake sandbox cannot validate a harness (run the real Docker tests); SCADS
+rate limits and runaway reasoning (LLM.md §6); PowerShell `*>` logs are UTF-16 and
+buffered; Python heredocs through the Bash tool turned `\n` inside string literals into real
+newlines — use the Edit tool for such lines. A backup of the pre-rewrite history is on
+branch `backup/before-coauthor-removal` (Sohaib may delete it).

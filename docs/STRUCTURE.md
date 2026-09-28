@@ -59,8 +59,8 @@ toolvalidator/                     # ← repo root
 │   │   └── schemas.py             # Pair, Property types for generated tests
 │   │
 │   ├── mutation/                  # S5's two arms (the RQ3 comparison)
-│   │   ├── __init__.py
-│   │   ├── arm_a_mutmut.py        # real mutation testing (systematic)
+│   │   ├── __init__.py            # Mutant, MutantSet (shared by both arms)
+│   │   ├── arm_a_mutmut.py        # mutmut's operators on an ast engine (systematic)
 │   │   ├── arm_b_llm.py           # LLM-invented mutants
 │   │   └── kill.py                # run surviving tests vs mutants → kill rate
 │   │
