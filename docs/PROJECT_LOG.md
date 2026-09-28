@@ -6,7 +6,7 @@ what happened when, what was decided, and what the numbers are**. It summarises 
 links; the detailed sources are listed in §9.
 
 **Last updated:** 2026-09-29 (Day 13 of the 14-day plan in `PLAN.md`) · branch `main` ·
-gate green: **381 tests, 0 skipped**.
+gate green: **388 tests, 0 skipped**.
 
 **Stage names used below:** S1 **syntax check** · S2 **static analysis** (bandit + mypy) ·
 S3 **test generation** (LLM writes tests from the task) · S4 **test run** (in the sandbox) ·
@@ -34,7 +34,8 @@ the code, another checks it against the task) · S6 **score** · S7 **MCP schema
 | S1 parse · S2 static · S3 test-gen · S4 execute (stdin + typed) | ✅ built, tested, S4 verified in real Docker |
 | S5b rubber-duck | ✅ built; `compare_explanation@v2` tuned on the dev set |
 | S6 score | 🟡 `scoring/signals.py` + `scoring/model.py` built; stage + verdict mapping not yet |
-| S5 mutation (arms A, B) · S7 MCP schema | ❌ not built |
+| S5 mutation (arms A, B) | 🟡 built and tested (steps 2–5, 2026-09-28/29); experiment run not yet done |
+| S7 MCP schema | ❌ not built |
 
 **Schedule reality:** PLAN.md wanted all experiments done by Day 10. RQ1–RQ4 have results as
 of the end of Day 10; **RQ5 (MCP schema) and S5 mutation are not started.** Commits happened on Days 1, 2, 7, 8, 10 (none on Days 3–6 or 9).
@@ -135,6 +136,7 @@ stage will map the score to ACCEPT vs NEEDS_REVIEW (approved 2026-09-26, not bui
 | S2 static | `stages/s2_static.py` | bandit (subprocess) + mypy (in-process, own config) | bandit finding ≥ HIGH (configurable); mypy is a signal only |
 | S3 test-gen | `stages/s3_testgen.py` | generator proposes *n* tests; judge (other model family, **blind to code**) keeps valid ones — one call per test or one batched call per suite; a prebuilt suite can be recorded for several tools (RQ3 shares one per entry) | never |
 | S4 execute | `stages/s4_execute.py`, `harness.py`, `compare.py` | runs **all** tests in one container call; mode from declared inputs (`stdin` → text; typed params → import + call) | wrong output, crash, timeout, `no_tests`, `no_entrypoint` |
+| S5 mutation | `stages/s5_mutation.py`, `mutation/` | runs the tool and each mutant (Arm A operators or Arm B LLM) against the tests in the sandbox; `mutation_score = killed / mutants` (experiment only, not in `pipeline.py`) | never |
 | S5b rubber-duck | `stages/s5b_rubberduck.py` | explainer sees code only; comparer (`compare_explanation@v2`) sees request + explanation only, returns met/violated/unknown per requirement; `semantics_score = met/(met+violated)` computed in Python | never |
 | S6 score | `scoring/` (stage planned) | see §3.6 | — |
 
@@ -156,7 +158,8 @@ tests (no leftover containers).
 ### 3.6 Reliability score (`scoring/`)
 
 - **`signals.py`** — per tool: `bandit_findings`, `mypy_error_count`, `test_pass_rate`,
-  `tests_run`, `semantics_score`, `semantic_violation`, `mutation_score` (None until S5).
+  `tests_run`, `semantics_score`, `semantic_violation`, `mutation_score` (from S5, arm A by
+  default, only when measured on generated tests).
   **Leakage guard:** `test_pass_rate` counts only if S3 ran before S4 (generated tests);
   the dataset's own tests are the ground truth and never an input.
 - **`model.py`** — logistic regression (standardised), **out-of-fold** predictions with
@@ -353,6 +356,18 @@ split S4 into stage + `harness.py` + `compare.py`; **typed function-call mode**;
   Mutants use the same per-test timeout as the tool (10 s) and run in the tool's container,
   as the RQ3 arms already do. A looping mutant costs up to 10 s × tests; the smoke run
   (step 6) measures how much that is. +9 tests (1 real Docker). Gate: 381 passed, 0 skipped.
+- **Step 5: mutation stage** (`stages/s5_mutation.py`, 67 lines) + `mutation_score` signal.
+  `run(artifact, record, sandbox, mutants=..., arm="A"|"B")` scores the tests S3 accepted
+  (or given tests) against the mutants and **always passes** (it measures tests, not the
+  tool); records `mutation_score`, `killed`, `total`, `usable_tests`, `tests`, `candidates`,
+  `dropped`, `from_s3`, `seconds`; category `no_tests` / `no_mutants` with a missing score.
+  Not wired into `pipeline.py` (experiment only, as agreed). `scoring/signals.py` now fills
+  `mutation_score` from the last S5 result of arm A (arm B on request) **only when S5 ran on
+  S3's generated tests** — same leakage guard as the pass rate: mutation measured on the
+  dataset's own tests would leak the label (a buggy tool fails more of them, so fewer tests
+  can kill). RQ3 records contain no S5, so the published RQ4 numbers are unchanged.
+  `ByCodeSandbox` fake moved to `tests/conftest.py` (now used by two test files).
+  +7 tests. Gate: 388 passed, 0 skipped.
 
 ---
 

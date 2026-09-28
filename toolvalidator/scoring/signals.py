@@ -8,6 +8,9 @@ Leakage guard: ``test_pass_rate`` is taken from S4 only when S3 ran before it, i
 when S4 executed *generated* tests. S4 on the dataset's own tests is the ground truth
 the score is judged against (PLAN.md §5.1), so it must never become an input.
 
+The same guard holds for ``mutation_score``: it is taken from S5 only when S5 ran on the
+tests S3 generated (``from_s3``), for one arm (A by default; both are recorded).
+
 No synthesis metadata: RunBugRun tools carry none (no confidence, no retry count).
 """
 
@@ -15,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, JsonValue
 
 from toolvalidator.contracts import StageResult, ValidationRecord
 
-S2, S3, S4, S5B = "s2_static", "s3_testgen", "s4_execute", "s5b_rubberduck"
+S2, S3, S4, S5, S5B = "s2_static", "s3_testgen", "s4_execute", "s5_mutation", "s5b_rubberduck"
 
 
 class Signals(BaseModel):
@@ -29,10 +32,10 @@ class Signals(BaseModel):
     tests_run: int
     semantics_score: float | None
     semantic_violation: bool | None
-    mutation_score: float | None  # TODO(scope): filled once S5 exists
+    mutation_score: float | None
 
 
-def collect_signals(record: ValidationRecord) -> Signals:
+def collect_signals(record: ValidationRecord, *, mutation_arm: str = "A") -> Signals:
     static = _last(record, S2)
     execute = _last(record, S4)
     generated = execute is not None and 0 <= _index(record, S3) < _index(record, S4)
@@ -45,8 +48,16 @@ def collect_signals(record: ValidationRecord) -> Signals:
         tests_run=(_integer(execute.data.get("total")) or 0) if generated and execute else 0,
         semantics_score=_number(duck.data.get("semantics_score")) if duck else None,
         semantic_violation=_violated(duck) if duck else None,
-        mutation_score=None,
+        mutation_score=_mutation_score(record, mutation_arm),
     )
+
+
+def _mutation_score(record: ValidationRecord, arm: str) -> float | None:
+    """The last S5 score for ``arm``, only if it was measured on S3's generated tests."""
+    runs = [r for r in record.results if r.stage == S5 and r.data.get("arm") == arm]
+    if not runs or runs[-1].data.get("from_s3") is not True:
+        return None
+    return _number(runs[-1].data.get("mutation_score"))
 
 
 def _last(record: ValidationRecord, stage: str) -> StageResult | None:

@@ -4,6 +4,7 @@ The fake sandbox never executes code (CLAUDE.md §7). The real-Docker fixtures s
 with a reason, when the daemon is down or the sandbox image is not built.
 """
 
+import json
 from collections.abc import Iterator
 from typing import Any
 
@@ -22,6 +23,31 @@ class FakeSandbox:
     def run(self, script: str, *, stdin: str = "", timeout_s: float | None = None) -> ExecResult:
         self.calls.append((script, stdin, timeout_s))
         return self.result
+
+
+class ByCodeSandbox:
+    """Answers each test-run harness call from a table: program code -> per-test pass/fail.
+
+    Executes nothing. ``None`` in the table means the whole call timed out.
+    """
+
+    def __init__(self, table: dict[str, list[bool] | None]) -> None:
+        self.table = table
+        self.codes: list[str] = []
+
+    def run(self, script: str, *, stdin: str = "", timeout_s: float | None = None) -> ExecResult:
+        code = json.loads(stdin)["code"]
+        self.codes.append(code)
+        passes = self.table[code]
+        if passes is None:
+            return ExecResult(stdout="", stderr="", exit_code=137, duration_s=1.0, timed_out=True)
+        results = [
+            {"index": i, "passed": p, "timed_out": False, "exit_code": 0}
+            for i, p in enumerate(passes)
+        ]
+        return ExecResult(
+            stdout=json.dumps({"results": results}), stderr="", exit_code=0, duration_s=0.1
+        )
 
 
 @pytest.fixture

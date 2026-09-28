@@ -66,6 +66,31 @@ def test_undecided_rubberduck_keeps_violation_flag_but_no_score(record: Validati
     assert signals.semantic_violation is False
 
 
+def _mutation(record: ValidationRecord, arm: str, score: float | None, from_s3: bool) -> None:
+    _add(record, "s5_mutation", arm=arm, mutation_score=score, from_s3=from_s3)
+
+
+def test_mutation_score_comes_from_arm_a_by_default(record: ValidationRecord) -> None:
+    _static(record)
+    _mutation(record, "A", 0.6, from_s3=True)
+    _mutation(record, "B", 0.8, from_s3=True)
+    assert collect_signals(record).mutation_score == 0.6
+    assert collect_signals(record, mutation_arm="B").mutation_score == 0.8
+
+
+def test_mutation_on_tests_s3_did_not_generate_is_ignored(record: ValidationRecord) -> None:
+    # Like the pass rate: mutation measured on the dataset's own tests would leak the label.
+    _static(record)
+    _mutation(record, "A", 0.9, from_s3=False)
+    assert collect_signals(record).mutation_score is None
+
+
+def test_missing_mutation_score_stays_missing(record: ValidationRecord) -> None:
+    _static(record)
+    _mutation(record, "A", None, from_s3=True)
+    assert collect_signals(record).mutation_score is None
+
+
 def test_signals_require_the_static_stage(record: ValidationRecord) -> None:
     _add(record, "s1_parse")
     signals = collect_signals(record)
