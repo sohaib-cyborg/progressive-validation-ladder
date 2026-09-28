@@ -68,6 +68,15 @@ def test_explain_prompt_shows_the_code_and_never_the_description() -> None:
     assert REQUEST.description not in rendered
 
 
+def test_invent_mutants_prompt_shows_the_code_and_never_the_description() -> None:
+    invent = spec("invent_mutants", "v1")
+    assert invent.role == "generator"
+    rendered = invent.render(code="print(sum(map(int, input().split())))", n=5)
+    assert "print(sum(map(int" in rendered
+    assert "5" in rendered
+    assert REQUEST.description not in rendered
+
+
 def test_compare_prompt_shows_description_and_explanation_never_the_code() -> None:
     compare = spec("compare_explanation", "v1")
     assert compare.role == "judge"

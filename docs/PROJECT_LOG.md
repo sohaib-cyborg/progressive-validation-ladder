@@ -5,8 +5,8 @@ Dresden). This file is the single place to see **what exists, how it fits togeth
 what happened when, what was decided, and what the numbers are**. It summarises and
 links; the detailed sources are listed in §9.
 
-**Last updated:** 2026-09-28 (Day 12 of the 14-day plan in `PLAN.md`) · branch `main` ·
-gate green: **328 tests, 0 skipped**.
+**Last updated:** 2026-09-29 (Day 13 of the 14-day plan in `PLAN.md`) · branch `main` ·
+gate green: **381 tests, 0 skipped**.
 
 **Stage names used below:** S1 **syntax check** · S2 **static analysis** (bandit + mypy) ·
 S3 **test generation** (LLM writes tests from the task) · S4 **test run** (in the sandbox) ·
@@ -181,7 +181,8 @@ tests (no leftover containers).
   and raises on a miss.
 - **Prompt registry** (`prompts/`): `generate_tests@v1`, `judge_test@v1`, `judge_batch@v1`
   (whole suite in one call), `explain_code@v1`, `compare_explanation@v1` and `@v2` (v2 is the
-  S5b default: at most 6 requirements, do not solve the task). Released versions are immutable; `docs/PROMPTS.md` is generated
+  S5b default: at most 6 requirements, do not solve the task), `invent_mutants@v1` (S5 arm B,
+  generator, code only). Released versions are immutable; `docs/PROMPTS.md` is generated
   and a test fails if it drifts.
 
 ### 3.8 Data
@@ -330,6 +331,28 @@ split S4 into stage + `harness.py` + `compare.py`; **typed function-call mode**;
   Probe (not a result): 200 real `fixed` programs → 2,305 mutants (median 10.5, max 20),
   0 dropped, 2 programs with nothing to mutate. Decision recorded in DECISIONS.md;
   MEMORY locked decision 3 updated. Gate: 362 passed, 0 skipped.
+- **Step 3: Arm B LLM mutants** (`mutation/arm_b_llm.py`, 79 lines; prompt `invent_mutants@v1`
+  in `prompts/mutation.py`, generator role, **code only**). One call per tool asks for 5
+  whole-program variants, each with one realistic mistake; candidates that are not an object
+  with `code`, do not parse, equal the original or an earlier one by syntax tree (so a
+  comment-only change is dropped), or exceed 5 are dropped and counted; a reply with no JSON
+  raises. PROMPTS.md regenerated. +10 tests (1 real Qwen call).
+  Probe (1 real call, not a result): entry 9080 (sort 10 numbers, print the top 3) → 5 returned,
+  5 kept, 12.4 s: `a[9]`→`a[8]`, `a[8]`→`a[7]`, `a[7]`→`a[6]`, `range(10)`→`range(11)`, and one
+  4-line "sort descending" variant (one idea, but more than the one small edit asked for).
+  Gate: 372 passed, 0 skipped.
+- **Step 4: kill counting** (`mutation/kill.py`, 88 lines). `run_matrix` runs the tool and
+  each mutant once against the whole (union) suite, one sandbox call per program, giving a
+  pass/fail matrix; `suite_score(matrix, indices)` scores any sub-suite from it. A test kills a
+  mutant iff the tool passes it and the mutant fails it; score = killed / mutants, **None**
+  when there are no mutants or the suite is empty (missing, not 0). A program whose whole
+  call times out fails every test. Raw score, not adjusted for equivalent mutants.
+  Example (real Docker): tool `n+1`, tests `1→2`, `5→6`; mutants `n-1` (killed by both),
+  "wrong only when n ≥ 5" (killed by test 2 only), `1+n` (equivalent, never killed), an
+  infinite loop (times out → killed) → 3 of 4 killed; test 1 alone kills 2.
+  Mutants use the same per-test timeout as the tool (10 s) and run in the tool's container,
+  as the RQ3 arms already do. A looping mutant costs up to 10 s × tests; the smoke run
+  (step 6) measures how much that is. +9 tests (1 real Docker). Gate: 381 passed, 0 skipped.
 
 ---
 

@@ -9,6 +9,7 @@ comparison would be a lie.
 --write``) and a test fails if the two drift, so the reviewed text is the text that runs.
 """
 
+from toolvalidator.prompts.mutation import INVENT_MUTANTS_V1
 from toolvalidator.prompts.rubberduck import (
     COMPARE_EXPLANATION_V1,
     COMPARE_EXPLANATION_V2,
@@ -26,6 +27,7 @@ REGISTRY = register(
     EXPLAIN_CODE_V1,
     COMPARE_EXPLANATION_V1,
     COMPARE_EXPLANATION_V2,
+    INVENT_MUTANTS_V1,
 )
 
 

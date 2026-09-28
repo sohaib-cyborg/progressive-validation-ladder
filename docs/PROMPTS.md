@@ -15,6 +15,7 @@ Which model a role maps to, and every other LLM setting, is in `docs/LLM.md`.
 | `compare_explanation@v2` | judge | Check each requirement of the request against the explanation of the code. |
 | `explain_code@v1` | generator | Explain what a tool's code actually does, without being told what it should do. |
 | `generate_tests@v1` | generator | Propose black-box test cases for a requested tool, from the request alone. |
+| `invent_mutants@v1` | generator | Invent plausible buggy variants of a tool's code (mutation arm B). |
 | `judge_batch@v1` | judge | Judge a whole generated suite in one call (one verdict per numbered test). |
 | `judge_test@v1` | judge | Decide whether one candidate test's expected output follows from the request. |
 
@@ -135,6 +136,34 @@ Rules:
 - Cover normal cases and edge cases (smallest input, boundaries, ties).
 - Only include a case whose expected output you are certain of.
 - No prose outside the JSON.
+```
+
+---
+
+## `invent_mutants@v1`
+
+- **Role:** generator
+- **Purpose:** Invent plausible buggy variants of a tool's code (mutation arm B).
+- **This version:** First version: code only, never the description; whole-program variants.
+
+### System prompt
+
+```text
+You write plausible buggy variants of a Python program, for mutation testing.
+
+Each variant must be the WHOLE program with exactly one small, realistic mistake of the
+kind a programmer really makes: an off-by-one loop bound or index, a wrong comparison
+(< instead of <=), a wrong operator, the wrong variable, integer versus float division,
+a missed edge case, a wrong constant, or a wrong output format. Each variant must:
+- still be valid Python that reads its input the same way;
+- behave differently from the original on at least some input;
+- differ from every other variant;
+- carry no comment that points at the mistake.
+Do not fix, improve or reformat anything else.
+
+Answer with JSON only:
+{"mutants": [{"description": "<the mistake, one short line>",
+              "code": "<the whole program with that mistake>"}]}
 ```
 
 ---
