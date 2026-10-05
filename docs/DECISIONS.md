@@ -554,3 +554,50 @@ comparison 288, string 241.
 **Caveats for the report:** raw mutation score, not adjusted for equivalent mutants (every
 strategy faces the same mutants, so comparisons stay fair); some mutants fail trivially
 (e.g. `str + str` -> `str - str` raises TypeError), exactly as mutmut's would.
+
+
+## 2026-09-28 — Mutation's role, the 100-entry subset, parallel strategies in the experiment only
+**Decision (Sohaib, 2026-09-28):** mutation measures **test-suite strength** ("mutants killed
+per strategy", PLAN §6.2), is an RQ4 signal, and is compared across arms (A vs B); it is not
+a detection strategy and never rejects a tool. It runs on the **first 100 completed RQ3 eval
+entries** in seeded order, with suites **replayed from the RQ3 trace** (no regeneration).
+Running every strategy on every tool applies to the **experiment only**; the pipeline keeps
+"failed test → REJECT".
+**Why not "keep only tests that kill a mutant" as a filter:** a test counts as killing only if
+the tool passes it, and the tests that catch a bug are ones the tool fails, which such a filter
+keeps anyway. So filtering by kills cannot change bug detection.
+**Replay detail (found 2026-09-29):** 61 generate/judge prompts repeat across RQ3 entries (two
+entries of one problem send the same blind prompt), so replay uses only each entry's own
+tagged, successful calls; rebuilt test counts must equal the RQ3 row or the entry fails.
+**Leakage guard:** `mutation_score` enters the reliability score only when measured on S3's
+generated tests (`from_s3`), like `test_pass_rate`.
+
+
+## 2026-10-02 — Finishing PLAN.md: agreement, judge independence, S6 stage, RQ5 on real MCP tools
+Approved by Sohaib ("everything that was in the plan should be completed"; RQ5 ground truth =
+real MCP tools). Plan file: `C:/Users/User/.claude/plans/velvet-napping-grove.md`.
+- **Rubber-duck agreement (PLAN §4.2):** re-run explain → compare on a seeded 25 of the 100
+  mutation-run entries (50 tools) with RQ3's prompts and models (checked against the RQ3 trace;
+  the run stops if they differ); compare with RQ3's verdicts. Missing stays missing.
+- **Judge independence (PLAN §6.5):** "same family" = the generator's own model
+  (`Qwen/Qwen3.8-27B`, the only Qwen on SCADS) running `judge_batch@v1`, via an experiment-only
+  adapter that sends the call in the generator role. The config rule judge ≠ generator stays
+  untouched (it protects the pipeline); the adapter's calls use the generator's completion cap
+  (16,384, not 8,192). Ground truth: a generated test is invalid iff the fixed tool fails it
+  (mutation-run container results); entries whose fixed tool fails its own dataset tests in
+  Tier 1 are excluded and counted.
+- **S6 stage:** deploys the RQ4 "all" signal set **without mutation** (it added nothing, STATUS
+  §4.8), fit on all 548 RQ3 tools and stored as plain numbers (`results/rq4/score_model.json`,
+  via `fit_reliability_score.py --model-out`). `predict` returns None when a signal is missing
+  that was never missing while fitting (no way to represent it). Pipeline (contract change
+  approved 2026-09-26): all stages passed + S6 score ≥ `ScoreSettings.accept_threshold`
+  (default 0.5) → ACCEPT; lower or no score → NEEDS_REVIEW; no S6 → ACCEPT as before; a failed
+  stage still REJECTs first. `scoring/metrics.py` split out of `model.py` (pure refactor).
+- **RQ5 benchmark:** Project B's 23 FastMCP tools (`mcp_servers/research_tools/server.py`) and
+  the schemas that server really sent (recorded in Project B's trace files; one consistent schema
+  per tool across all files). The server is read with `ast`, never imported or run; the snapshot
+  lives in git-ignored `data/mcp_tools/` because Project B has no licence file. Conditions:
+  signature baseline (no LLM, FastMCP's rules), LLM on the code as written, LLM on the code
+  with every annotation removed; the request S7 sees has name + description only (its inputs
+  would give the answer away); LLM conditions × 3 runs. Output schemas are identical for all 23
+  tools (`result: string`), so output accuracy is reported but cannot separate methods.

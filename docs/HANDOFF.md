@@ -1,7 +1,7 @@
 # Handoff — start here in a new session
 
-**Written:** 2026-09-28 (Day 12 of the 14-day plan in `docs/PLAN.md`) · **Branch:** main ·
-**Last commit:** `f4cea99` · **Gate:** green, **323 tests, 0 skips**.
+**Written:** 2026-10-02 (after Day 14 of the plan in `docs/PLAN.md`) · **Branch:** main ·
+**Gate:** green, **457 tests, 0 skips**. Sohaib commits; check `git log` for the last commit.
 
 Read, in order: this file → `docs/PROJECT_LOG.md` (one-file log: architecture, timeline,
 decisions, results) → `docs/MEMORY.md` (locked decisions + session log) →
@@ -34,7 +34,7 @@ cd C:\Users\User\Downloads\tool_validator
 ruff format . && ruff check . && mypy --strict toolvalidator data experiments && pytest -q
 ```
 
-Expect **323 passed, 0 skipped**. If tests skip, something below is not running:
+Expect **457 passed, 0 skipped**. If tests skip, something below is not running:
 
 | Needs | Check | If missing |
 |---|---|---|
@@ -50,41 +50,71 @@ A skip always prints its reason. **A skipped sandbox test is not a passing one.*
 | Research question | State |
 |---|---|
 | RQ1/RQ2 static vs execution | ✅ Tier 1 (1,999 entries, all tests): static slip 100%, execution slip 0.35%, false rejection 1.5% |
-| RQ3 tests from the request | ✅ eval (274/300 entries): bugs caught — statement samples 74.5%, generated 89.8%, judged 88.7% |
+| RQ3 tests from the request | ✅ eval (274/300 entries): bugs caught — statement samples 74.5%, generated 89.8%, judged 88.7%; **side-by-side table with mutation on 100 entries: STATUS §4.8** |
 | RQ4 reliability score | ✅ out of fold: AUC 0.966, ρ 0.808, Brier 0.058; without rubber-duck 0.927 |
-| RQ5 MCP schema | ❌ not started |
+| RQ5 MCP schema | ✅ 23 real MCP tools (Project B): LLM input schemas exact 138/138; output schema valid 74–80% (STATUS §4.12) |
 
 Built: syntax check, static analysis, test generation (per-test or batched judge, prebuilt
 suites), test run (stdin + typed modes, real-Docker verified), rubber-duck
 (`compare_explanation@v2`), `scoring/` (signals + grouped-CV model), RQ1/RQ2, RQ3 and RQ4
 runners, LLM tracing + offline replay, prompt registry, completion caps, 429 waits.
-**Not built:** mutation (S5, both arms), the score *stage* (S6), MCP schema (S7), `agents/`.
+Mutation (S5, both arms) built and run on 100 entries (experiment only, not in `pipeline.py`).
+S6 score stage + pipeline mapping (>= 0.5 → ACCEPT, else NEEDS_REVIEW), S7 MCP schema, rubber-duck
+agreement and judge-independence runners (2026-10-02). **Not built:** `agents/` (optional).
 
 Results on disk (git-ignored): `results/tier1/`, `results/rq3/testgen_eval.*` + trace
-`results/rq3/rq3-eval/`, `results/rq4/score_eval.json`, pilots `results/pilot*`.
+`results/rq3/rq3-eval/`, `results/rq4/score_eval.json`, `results/mutation/` (+ trace `mutation-eval/`),
+`results/comparison/strategies.{json,md}`, `results/agreement/`, `results/judge_independence/`,
+`results/rq4/score_model.json` (the deployed S6 model), `results/rq5/`, pilots `results/pilot*`.
+RQ5 needs Project B on disk: `C:/Users/User/Documents/ramiya/Capability-Gap-Detection-in-Agentic-Workflows`.
 
-## 3. Do this next
+## 3. Where things stand and what to do next (2026-10-02)
 
-**The plan for mutation + the side-by-side strategy comparison is written and awaiting
-Sohaib's review:** `C:\Users\User\.claude\plans\generator-proposes-n-tests-snug-gem.md`.
-Do not start it until he says "implement". In short:
+**Done:** every PLAN.md item has a result (RQ1–RQ5, mutation arms, rubber-duck agreement,
+judge independence, S6 stage; STATUS §4.5–4.12) and the **report is drafted**:
+`docs/reports/Project_D_Report.docx` (Word, A4, ~4,000 words, 8 tables; schema-validated).
 
-- **Arm A** — operator-based mutants (mutmut's operator classes, own `ast` engine, because
-  mutmut 3 cannot mutate module-level scripts = 86% of programs); **Arm B** — LLM-invented
-  mutants (`invent_mutants@v1`, generator role, code only).
-- Mutation's role (agreed): **"mutants killed per strategy"** (test strength), an RQ4
-  signal, and Arm A vs Arm B agreement. Filtering tests by kills cannot change bug detection
-  (a killing test must pass on the tool), so it is not a detection arm.
-- On the **first 100 completed RQ3 eval entries**; suites **rebuilt offline** from the RQ3
-  trace with `ReplayClient` (no regeneration).
-- One comparison table, every strategy a row with the same columns (bugs caught, correct
-  tools rejected, mutation score A/B, tokens, seconds): statement samples · generated ·
-  judged · rubber-duck alone · judged ∪ rubber-duck. Then the conclusion, from the numbers.
-- Parallel strategies apply to the **experiment only**; the pipeline keeps "failed test →
-  REJECT" (Sohaib, 2026-09-28).
+**Next, in this order:**
+1. **Commit** the uncommitted work (§3a). Sohaib makes the commits.
+2. **Sohaib reviews the report** in Word: accept "update fields" (or the contents page is
+   empty); check layout visually (never rendered here: no LibreOffice on this machine), the
+   title-page date and names, and the Discussion's last paragraph (the draft conclusion of
+   STATUS §4.8, phrased as a suggestion).
+3. **Decide the S6 threshold** (default 0.5; trade-off table STATUS §4.11 / report Table 7).
+4. Optional: add Sohaib's own related-work papers (he chose "only what the repo cites" for now;
+   never invent citations); split the 11 oversized files (needs approval for new files); give
+   the CLI a full LLM + Docker configuration.
 
-After that: S6 score stage (approved; the `scoring/metrics.py` split needs approval), RQ5
-(S7), then writing (Days 13–14).
+**Report build script:** `build_report.js` (docx-js) lives only in the 2026-10-02 session's
+scratch folder `C:/Users/User/AppData/Local/Temp/claude/c--Users-User-Downloads-tool-validator/
+9dc86c4b-883d-49fc-b701-df797d1fe237/scratchpad/` and may be deleted with it. To change the
+report, edit the .docx in Word, or ask to save the script into the repo (a new file → approval).
+
+### 3a. Uncommitted work and the suggested commits (in this order — later files import earlier ones)
+1. `toolvalidator/mutation/kill.py`, `tests/mutation/test_kill.py` —
+   `mutation: pass float tolerances through run_matrix`
+2. `experiments/run_mutation_arms.py` + test — `experiments: add the mutation-arms runner with suites replayed from the RQ3 trace`
+3. `toolvalidator/scoring/metrics.py`, `scoring/model.py`, `tests/scoring/test_metrics.py`,
+   `tests/scoring/test_model.py` — `scoring: split metrics out of model.py; add the deployed ScoreModel`
+   (`model.py` holds both; use `git add -p` to keep the refactor in its own commit)
+4. `toolvalidator/config.py`, `pipeline.py`, `stages/s6_score.py`, `tests/test_config.py`,
+   `tests/test_pipeline.py`, `tests/stages/test_s6_score.py` —
+   `s6: add the score stage and map the score to ACCEPT or NEEDS_REVIEW`
+5. `experiments/fit_reliability_score.py` + test — `experiments: fit extra signal sets and write the deployed S6 model`
+6. `experiments/compare_strategies.py` + test — `experiments: add the side-by-side strategy comparison`
+7. `experiments/run_rubberduck_agreement.py` + test — `experiments: measure rubber-duck run-to-run agreement`
+8. `experiments/run_judge_independence.py` + test — `experiments: compare a same-model judge with the other-family judge`
+9. `.gitignore`, `data/loaders/mcp_tools.py`, `tests/data/loaders/test_mcp_tools.py` —
+   `data: load Project B's MCP tools and real schemas (never committed)`
+10. `toolvalidator/prompts/mcp.py`, `prompts/__init__.py`, `stages/s7_mcp_schema.py`,
+    `tests/stages/test_s7_mcp_schema.py`, `tests/prompts/test_registry.py`, `docs/PROMPTS.md` —
+    `s7: add the MCP schema stage and generate_mcp_schema@v1`
+11. `experiments/run_mcp_accuracy.py` + test — `experiments: add the RQ5 MCP schema accuracy runner`
+12. `docs/DECISIONS.md`, `HANDOFF.md`, `MEMORY.md`, `PROJECT_LOG.md`, `STRUCTURE.md`,
+    `reports/STATUS.md` — `docs: record agreement, judge independence, S6 and RQ5 results`
+13. `docs/reports/Project_D_Report.docx` — `docs: add the final written report`
+
+Never commit `data/mcp_tools/` (Project B has no licence; it is git-ignored) or `results/`.
 
 ## 4. Decisions already made (don't relitigate; see DECISIONS.md)
 

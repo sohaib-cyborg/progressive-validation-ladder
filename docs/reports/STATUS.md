@@ -1,6 +1,6 @@
 # Project D — Status Report
 
-**As of:** 2026-09-26 (Day 10 of the 14-day plan) · **Branch:** main · **Gate:** green
+**As of:** 2026-10-02 (§4.8–4.12 added after Day 13; earlier sections as of Day 10) · **Branch:** main · **Gate:** green
 (`ruff format . && ruff check . && mypy --strict toolvalidator data experiments && pytest -q`)
 
 A snapshot of what exists, how it works, what has actually been run, and what the
@@ -23,12 +23,12 @@ comes out with a verdict, ACCEPT or REJECT:
 |---|---|---|
 | S1 parse | `ast.parse`; syntax errors and parser overflow → REJECT | ✅ built |
 | S2 static | bandit (dangerous calls, hard gate) + mypy (type errors, soft signal) | ✅ built |
-| S3 test-gen | generator proposes tests, independent judge filters them | ✅ built (not yet run at scale) |
+| S3 test-gen | generator proposes tests, independent judge filters them | ✅ built; RQ3 eval run (§4.6) |
 | S4 execute | runs the tool against tests **inside the sandbox**, stdin *or* typed function call | ✅ built, both modes verified against real Docker |
-| S5 mutation | mutation testing, two arms | ❌ not built |
-| S5b rubber-duck | LLM explains the code (blind to the spec); a second LLM checks each requirement (blind to the code); score computed in Python | ✅ built; one real SCADS run on 2 toy tools, not yet on RunBugRun |
-| S6 score | signals from a record → grouped-CV logistic regression, AUC/ρ/Brier/calibration/ablation | 🟡 signals + model built, tested on synthetic data only; **no real fit yet**; no stage wiring |
-| S7 MCP schema | generate an MCP JSON schema | ❌ not built |
+| S5 mutation | how strong the tests are: Arm A operator mutants, Arm B LLM mutants; never rejects | ✅ built; 100-entry run (§4.8); experiment only, not in `pipeline.py` |
+| S5b rubber-duck | LLM explains the code (blind to the spec); a second LLM checks each requirement (blind to the code); score computed in Python | ✅ built; RQ3 run (§4.6), repeatability (§4.9) |
+| S6 score | signals → P(correct) with the deployed RQ4 model; pipeline maps it to ACCEPT / NEEDS_REVIEW | ✅ built (§4.7, §4.11) |
+| S7 MCP schema | generator writes the MCP Tool object from request + code; structure checked in Python | ✅ built; RQ5 run (§4.12) |
 
 Supporting parts that exist: the pipeline state machine, contracts, settings, the
 RunBugRun loader, the Docker sandbox (container + execution), the SCADS LLM client,
@@ -323,22 +323,148 @@ RQ3 eval tools. Label = buggy vs fixed; inputs never include the dataset's own t
   may be that artifact; the label is buggy-vs-fixed on human bugs, not synthesized tools;
   no synthesis metadata or mutation score exists yet.
 
-## 5. Not built yet
+### 4.8 Every strategy side by side, with mutation (2026-09-29)
+**The first 100 RQ3 eval entries that completed = 200 tools**, the same tools for every row.
+Test suites are the published RQ3 suites, replayed offline from the RQ3 trace (per entry;
+counts matched RQ3 for all 100; 0 tools disagreed with RQ3's pass/fail). Mutants: Arm A =
+mutmut's operators on our `ast` engine (≤ 20 per tool, 2,337 total); Arm B = `invent_mutants@v1`
+on `Qwen/Qwen3.8-27B`, code only (≤ 5 per tool, 999 kept of 1,000). `results/comparison/`,
+`results/mutation/`.
 
-- **S5 mutation testing** (both arms), **S7 MCP schema**, and the S6 *stage* (the verdict
-  mapping needs a pipeline-contract decision). S5b and the S6 signals/model exist.
-- **Four of five experiment scripts:** test-generation strategies (RQ3), the score fit
-  (RQ4), MCP accuracy (RQ5), the optional judge study.
-- RQ3, RQ4 and RQ5 therefore have **no results at all** yet.
-- The full Tier 1 run (2,000 entries) has not been done; only 200-entry pilots.
+| Strategy | Bugs caught | Correct tools rejected | Mut. score A | Mut. score B | LLM tokens / entry | LLM s / entry |
+|---|---|---|---|---|---|---|
+| statement samples (no LLM) | 72 / 100 = 72% | 1 / 100 = 1% | 0.823 (0.386) | 0.808 (0.372) | 0 | 0 |
+| generated (8 blind tests) | 92 / 100 = 92% | 8 / 100 = 8% | 0.875 (0.454) | 0.894 (0.429) | 2,658 | 24.0 |
+| judged (generated, judge-filtered) | 91 / 100 = 91% | 7 / 100 = 7% | 0.875 (0.454) | 0.894 (0.429) | 4,477 | 52.0 |
+| rubber-duck alone | 63 / 100 = 63% | 2 / 100 = 2% | n/a (no tests) | n/a | 6,307 | 99.1 |
+| judged + rubber-duck | 94 / 100 = 94% | 8 / 100 = 8% | = judged | = judged | 10,784 | 151.1 |
 
-**Known blocker for S5 arm A:** mutmut 3 produces **no mutants for module-level code**
-(verified: 0 mutants for a script, 10 for the same logic inside `def main()`), and ~86%
-of RunBugRun entries have no `def`. Arm A needs a script→function wrapping step, which
-is a methodology choice that must be described in the report.
+Mutation score = mean share of mutants killed on the **fixed** (correct) tools; buggy tools in
+brackets (lower because a test can only kill a mutant if the tool passes it). Rubber-duck
+verdict missing for 26 buggy and 13 fixed tools, counted as "not flagged". LLM seconds are
+summed call latencies from the traces; **test-execution time per strategy was not recorded**
+by RQ3 and is not estimated here. Mutation's own cost per entry: Arm A 46.2 s sandbox; Arm B
+19.8 s sandbox + 3,573 tokens / 47.5 s LLM. The judge rejected tests in only 1 of the 100
+entries, which is why `judged` and `generated` have identical mutation scores.
 
-**Known scaling issue:** with ~100 tests per program, a program that times out on every
-test costs up to 1,000 s. A per-tool time budget is needed before the 2,000-entry run.
+**Arm A vs Arm B.** Per test (1,498 tests the tool passes): both arms killed ≥ 1 mutant for
+1,340, only A for 132, only B for 21, neither for 5 — raw agreement 0.90 but Cohen's κ 0.03,
+because almost every test kills something of both arms, so agreement beyond chance is nil.
+Spearman of per-tool scores (generated suite): 0.40 on fixed tools, 0.89 on buggy tools (on
+buggy tools both scores are driven by how many tests the tool passes).
+
+**RQ4 refit on these 200 tools** (out of fold, 5 folds grouped by problem; `mutation_score` =
+the arm's score on the judged tests):
+
+| Signals | AUC (A) | AUC (B) | Brier (A / B) |
+|---|---|---|---|
+| all (static + tests + rubber-duck), no mutation | 0.945 | 0.945 | 0.080 |
+| all + mutation | 0.944 | 0.946 | 0.078 / 0.079 |
+| tests only | 0.928 | 0.928 | 0.103 |
+| tests + mutation | 0.950 | 0.936 | 0.100 / 0.102 |
+| mutation only | 0.809 | 0.823 | 0.171 / 0.157 |
+
+**Caveats.** n = 100 entries: differences of 1–3 tools between rows are within noise and no
+significance test was run. Mutation scores are raw (equivalent mutants not removed). "Mutation
+only" partly re-encodes the pass rate (buggy tools pass fewer tests, so fewer tests can kill).
+The subset is the first 100 *completed* RQ3 entries, so it inherits RQ3's lean toward easier
+problems. Human bugs stand in for synthesized-tool errors.
+
+**What the numbers say (draft conclusion, for Sohaib's review).**
+1. **Generated tests are the strategy to keep.** Over statement samples they catch 20 more
+   bugs in 100 (72% → 92%) and are stronger by mutation (0.823 → 0.875 Arm A, 0.808 → 0.894
+   Arm B), for 7 more correct tools rejected and ~2,700 tokens per entry.
+2. **The judge buys almost nothing here:** −1 false rejection, −1 bug caught, identical
+   mutation scores, for +1,800 tokens and roughly double the LLM time per entry.
+3. **Rubber-duck is weaker alone** (63% caught, missing for 26% of buggy tools) and the most
+   expensive; added to judged tests it catches 3 more bugs (91% → 94%) for 1 more correct tool
+   rejected and ~6,300 tokens per entry. Worth it only if catching the last few bugs matters
+   more than cost.
+4. **Mutation is a measuring stick, not a detector.** Both arms rank the strategies the same way
+   (samples < generated = judged), but as a reliability-score signal it adds nothing on top of
+   all signals (AUC 0.945 → 0.944 / 0.946). Arm B (5 LLM mutants) gives the same strategy
+   ranking as Arm A (up to 20 operator mutants) at 43% of Arm A's sandbox time plus one LLM
+   call per tool.
+
+### 4.9 How repeatable is the rubber-duck verdict? (PLAN §4.2, 2026-10-02)
+Seeded 25 of the 100 entries (50 tools); rubber-duck run again with RQ3's prompts and models
+(`explain_code@v1`, `compare_explanation@v2`, Qwen3.8-27B / GLM-5.3-Flash — checked against the
+RQ3 trace), compared with RQ3's run. `results/agreement/`.
+- **Verdict ("any requirement violated"):** same in **43 of 44** tools where both runs gave one
+  (97.7%, Cohen's κ **0.95**); the one change was a buggy tool flagged in RQ3, not flagged now.
+- **Score (`semantics_score`):** Spearman **0.97** over 44 pairs.
+- **Explanation text:** identical in only **2 of 49** — the model rephrases every time but
+  reaches the same conclusion.
+- **Missing:** 4 tools per run (output past the token cap), as in RQ3.
+
+### 4.10 Judge independence (optional PLAN §6.5, 2026-10-02)
+Same 100 entries and suites (replayed). "Different family" = RQ3's judge `GLM-5.3-Flash`;
+"same family" = the generator's own model `Qwen/Qwen3.8-27B` running the identical
+`judge_batch@v1`. Ground truth: a generated test is wrong iff the correct tool fails it (real
+container runs). 1 entry excluded (its correct tool fails its own dataset tests), 1 Qwen reply
+unusable → **98 entries, 768 generated tests, 20 of them wrong**. `results/judge_independence/`.
+
+| Judge | Tests rejected | Wrong tests caught | Valid tests rejected | Bugs caught (98) | Correct tools rejected (98) |
+|---|---|---|---|---|---|
+| none (all generated tests) | 0 | 0 / 20 | 0 | 90 | 8 |
+| different family (GLM-5.3-Flash) | 1 | 1 / 20 | 0 | 89 | 7 |
+| same model (Qwen3.8-27B) | 3 | 2 / 20 | 1 | 89 | 7 |
+
+Both judges accept almost everything, so independence makes no measurable difference here;
+the agreement on rejections is 765/768 (κ 0.50 on very few rejections). n = 98 entries.
+
+### 4.11 S6 score stage: what the threshold does (2026-10-02)
+The deployed model = RQ4's "all" signal set (no mutation), fit on the 548 RQ3 tools
+(`results/rq4/score_model.json`; the refit reproduces AUC 0.966). In the pipeline only tools
+that **pass every generated test** reach S6: in RQ3 that is 259 correct + 31 buggy tools.
+Out-of-fold scores of those tools:
+
+| Threshold | Correct tools ACCEPTed (of 259) | Buggy tools ACCEPTed (of 31) |
+|---|---|---|
+| 0.3 | 257 | 18 |
+| **0.5 (default)** | **249** | **16** |
+| 0.7 | 230 | 7 |
+| 0.9 | 223 | 5 |
+
+At 0.5, S6 sends 15 of the 31 bugs the tests missed to NEEDS_REVIEW, at the cost of 10 correct
+tools also going to review. The threshold is a choice for Sohaib; the table is the trade-off.
+
+### 4.12 RQ5 — MCP schema accuracy on real MCP tools (2026-10-02)
+**Benchmark:** Project B's 23 FastMCP tools and the schemas that server really sent (0–5
+parameters per tool; every tool returns `str`, so every reference output is `result: string`).
+S7 = `generate_mcp_schema@v1` on `Qwen/Qwen3.8-27B`; the request it sees has name + description
+only. 3 runs per LLM condition, 138 calls, 0 errors (median 819 tokens, 3.6 s per call).
+`results/rq5/`.
+
+| Condition | Input schema exact | Name F1 | Types | `required` | Valid MCP object | Output exact (`result: string`) |
+|---|---|---|---|---|---|---|
+| signature baseline (no LLM) | 23/23 | 1.00 | 1.00 | 1.00 | 23/23 | 23/23 |
+| LLM, code with type hints | **69/69** | 1.00 | 1.00 | 1.00 | 51/69 = 74% | 19/69 = 28% |
+| LLM, type hints removed | **69/69** | 1.00 | 1.00 | 1.00 | 55/69 = 80% | 17/69 = 25% |
+
+- **Inputs are solved:** every LLM run got every parameter name, type, `required` flag and
+  default right, with or without hints, and the 3 runs always agreed on the inputs.
+- **Outputs are the weak spot:** all 32 invalid schemas fail for one reason — `outputSchema`
+  given as `{"type": "string"}` instead of an object, although the MCP Tool definition and the
+  prompt both require an object. Validity varies run to run for 8 of 23 tools in each
+  condition; always invalid:
+  `search_tickets`, `realtime_weather` (with hints), `csv_reader` (without).
+- **Complexity:** input F1 is 1.0 for every tool, so its correlation with parameter count or
+  lines of code is undefined (no variation), not zero.
+- **Caveats:** 23 small tools (≤ 5 parameters) from one server; FastMCP derives the reference
+  from the same type hints the signature baseline reads, so the baseline is exact by
+  construction; output accuracy mostly measures knowledge of FastMCP's `result` wrapping.
+
+## 5. What is still missing
+
+- Every stage and every PLAN.md experiment now exists and has run (§4.5–4.12). The CLI still
+  runs the static configuration only, so NEEDS_REVIEW (exit code 3) is reachable through
+  `run_pipeline` and the runners, not the CLI.
+- Optional, not built: the `agents/` (LangGraph) layer.
+- Resolved since the Day 10 version of this section: the mutmut-on-scripts blocker (arm A now
+  applies mutmut's operators on an `ast` engine, DECISIONS 2026-09-28); the Tier 1 run (§4.5).
+  Still true: a program that times out on every test costs up to ~10 s per test (mutation
+  run: one entry took 862 s per tool); no per-tool time budget exists.
 
 ---
 

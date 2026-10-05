@@ -251,3 +251,27 @@ Status (fill in after running):
 - Plan for mutation arms + a side-by-side comparison of every strategy written, awaiting
   review: `C:/Users/User/.claude/plans/generator-proposes-n-tests-snug-gem.md`.
 
+### Days 12–13 (2026-09-28/29) — mutation built, run, and every strategy compared
+- Plan steps 1–7 done (Sohaib commits each step): `s4_execute.run_cases`, Arm A (mutmut's
+  operators on an `ast` engine — locked decision 3 amended), Arm B (`invent_mutants@v1`),
+  `mutation/kill.py`, `stages/s5_mutation.py` + `mutation_score` signal (leakage-guarded),
+  `run_mutation_arms.py`, `compare_strategies.py`. Gate: 409 passed, 0 skipped.
+- 100-entry mutation run: 0 errors, replay reproduced every RQ3 suite. Table in STATUS §4.8:
+  generated 92% caught / 8% correct rejected; judge adds little; rubber-duck +3 catches for
+  ~6,300 tokens; mutation adds nothing to RQ4 (AUC 0.945 → 0.944/0.946).
+- Gotchas: RQ3 trace prompts repeat across entries of one problem → replay per entry's own
+  calls; hanging mutants make runs ~2x slower than a 2-entry smoke suggests.
+- Next: Sohaib reviews the draft conclusion; then S6 stage, RQ5 (S7), writing.
+
+### After Day 14 (2026-10-02) — every remaining PLAN.md item
+- Plan `velvet-napping-grove.md` (approved): rubber-duck agreement (verdict same 43/44, κ 0.95),
+  judge independence (GLM 1, Qwen 2 of 20 wrong tests caught; same tool-level outcome), S6 stage
+  (deployed "all" model, threshold 0.5, pipeline NEEDS_REVIEW mapping), RQ5 on Project B's 23
+  real MCP tools (inputs exact 138/138; output schema valid 74–80%). Gate: 457 passed, 0 skipped.
+- Gotchas: a trailing `#` on a `.gitignore` line breaks the pattern; config forbids judge ==
+  generator, so the same-model judge goes through an experiment-only adapter; RQ5 data must not
+  be committed (Project B has no licence).
+- **Report drafted:** `docs/reports/Project_D_Report.docx` (Word, Sohaib's choice; related work cites
+  only sources the repo names). Built with docx-js from a scratch-folder script (not in the repo).
+- Next: commits (HANDOFF §3a), Sohaib reviews the report, picks the S6 threshold, reviews the
+  STATUS §4.8 conclusion.

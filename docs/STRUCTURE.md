@@ -22,7 +22,8 @@ toolvalidator/                     # ← repo root
 │   └── reports/                   # progress reports: what was done, commands, real output
 │       ├── README.md              # index + entry format
 │       ├── SPRINTS.md             # sprint plan (5 sprints over the 14 days) + risks
-│       └── sprint-NN.md           # one work log per sprint
+│       ├── sprint-NN.md           # one work log per sprint
+│       └── Project_D_Report.docx  # the final written report (Word)
 │
 ├── toolvalidator/                 # ← the package (the pipeline itself)
 │   │
@@ -67,14 +68,16 @@ toolvalidator/                     # ← repo root
 │   ├── scoring/                   # S6's guts (the reliability score)
 │   │   ├── __init__.py
 │   │   ├── signals.py             # Signal type; collect signals from a record
-│   │   └── model.py               # the fitted logistic regression + calibration
+│   │   ├── metrics.py             # AUC, Spearman, calibration bins
+│   │   └── model.py               # the fitted logistic regression; deployed ScoreModel + predict (S6)
 │   │
 │   ├── prompts/                   # versioned prompt registry (docs/PROMPTS.md is generated)
 │   │   ├── __init__.py            # REGISTRY + lookup + markdown_catalogue
 │   │   ├── spec.py                # PromptSpec + the docs renderer
 │   │   ├── testgen.py             # generate_tests@v1, judge_test@v1
 │   │   ├── rubberduck.py          # explain_code@v1, compare_explanation@v1 (S5b)
-│   │   └── mutation.py            # invent_mutants@v1 (S5 arm B)
+│   │   ├── mutation.py            # invent_mutants@v1 (S5 arm B)
+│   │   └── mcp.py                 # generate_mcp_schema@v1 (S7, RQ5)
 │   │
 │   ├── llm/                       # SCADS client (the only place network-to-LLM lives)
 │   │   ├── __init__.py
@@ -87,17 +90,22 @@ toolvalidator/                     # ← repo root
 ├── data/                          # datasets (git-ignored if large; loaders are not)
 │   ├── loaders/
 │   │   ├── __init__.py
-│   │   └── runbugrun.py           # RunBugRun (Python subset) → CapabilityRequest+tool+tests+label
-│   └── runbugrun_py/              # the extracted Python problems (git-ignored)
+│   │   ├── runbugrun.py           # RunBugRun (Python subset) → CapabilityRequest+tool+tests+label
+│   │   └── mcp_tools.py           # Project B's 23 MCP tools + their real schemas (RQ5; read with ast)
+│   ├── runbugrun_py/              # the extracted Python problems (git-ignored)
+│   └── mcp_tools/                 # RQ5 snapshot of Project B's tools (git-ignored; no licence)
 │
 ├── experiments/                   # THE DELIVERABLE — each produces numbers/figures
 │   ├── __init__.py
 │   ├── common.py                  # shared: load dataset, run pipeline over it, save results
 │   ├── run_static_vs_dynamic.py   # RQ1/RQ2: the headline comparison
 │   ├── run_testgen_strategies.py  # RQ3: generator/mutation-A/mutation-B/rubberduck
+│   ├── run_mutation_arms.py       # S5 arms A/B on 100 RQ3 eval entries (suites replayed from the RQ3 trace)
+│   ├── compare_strategies.py      # one table: every test strategy side by side (RQ3 + mutation)
 │   ├── fit_reliability_score.py   # RQ4: fit regression, correlation, calibration, ablation
 │   ├── run_mcp_accuracy.py        # RQ5: schema accuracy vs reference
-│   └── run_judge_independence.py  # (optional) same-family vs cross-family judge
+│   ├── run_judge_independence.py  # (optional) same-model vs other-family judge
+│   └── run_rubberduck_agreement.py # rubber-duck re-run: verdict agreement (PLAN §4.2)
 │
 ├── results/                       # experiment outputs: json + figures (git-ignored)
 │   └── .gitkeep
