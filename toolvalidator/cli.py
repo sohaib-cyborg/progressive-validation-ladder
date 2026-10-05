@@ -8,6 +8,7 @@ Prints the ValidationRecord as JSON. Exit code: 0 ACCEPT, 1 REJECT,
     python -m toolvalidator.cli prompts --write    # regenerate docs/PROMPTS.md
 """
 
+import utils.session
 import argparse
 import sys
 from collections.abc import Sequence
