@@ -11,7 +11,6 @@ venv/
 htmlcov/
 
 # Secrets
-.env
 
 # Data & results (large / regenerable)
 data/runbugrun_py/
@@ -24,4 +23,5 @@ results/*
 # OS/editor
 .DS_Store
 .idea/
-.vscode/
+config.bat
+node_modules
