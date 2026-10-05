@@ -14,6 +14,7 @@ Hard safety gates (S1 parse, S2 dangerous calls) stay outside the regression: th
 fits only on tools that passed them (MEMORY.md, locked decision 5).
 """
 
+import math
 from collections.abc import Sequence
 
 import numpy as np
@@ -94,6 +95,57 @@ def evaluate(
             name: auc(labels, _without(name, matrix, columns, labels, split)) for name in kept
         },
     )
+
+
+class ScoreModel(_Frozen):
+    """The deployed score (S6): standardise each feature, then a logistic regression.
+
+    Stored as plain numbers so the pipeline can score a tool without scikit-learn state.
+    """
+
+    signals: list[str]
+    features: list[str]  # columns, including ``<signal>_missing`` indicators
+    means: list[float]
+    scales: list[float]
+    coefficients: list[float]
+    intercept: float
+
+
+def fit_model(
+    rows: Sequence[Signals], labels: Sequence[bool], signals: Sequence[str] = SIGNALS
+) -> ScoreModel:
+    """The final fit on all rows, as the deployed model (metrics come from ``evaluate``)."""
+    matrix, columns, _ = feature_matrix(rows, signals)
+    if not columns:
+        raise ValueError("no signal was observed; nothing to fit")
+    fitted = _model().fit(np.asarray(matrix, dtype=float), np.asarray(labels, dtype=int))
+    scaler: StandardScaler = fitted[0]
+    regression: LogisticRegression = fitted[-1]
+    return ScoreModel(
+        signals=[name for name in signals if name in columns],
+        features=columns,
+        means=[float(v) for v in scaler.mean_],
+        scales=[float(v) for v in scaler.scale_],
+        coefficients=[float(v) for v in regression.coef_[0]],
+        intercept=float(regression.intercept_[0]),
+    )
+
+
+def predict(model: ScoreModel, row: Signals) -> float | None:
+    """P(correct) for one tool; None if a signal is missing that was never missing in fitting."""
+    z = model.intercept
+    for feature, mean, scale, weight in zip(
+        model.features, model.means, model.scales, model.coefficients, strict=True
+    ):
+        if feature.endswith(MISSING):
+            value = 1.0 if getattr(row, feature.removesuffix(MISSING)) is None else 0.0
+        else:
+            raw = getattr(row, feature)
+            if raw is None and feature + MISSING not in model.features:
+                return None  # the model has no way to represent this gap
+            value = 0.0 if raw is None else float(raw)
+        z += weight * (value - mean) / scale
+    return 1.0 / (1.0 + math.exp(-z)) if z >= 0 else math.exp(z) / (1.0 + math.exp(z))
 
 
 def feature_matrix(

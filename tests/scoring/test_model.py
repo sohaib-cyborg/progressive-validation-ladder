@@ -6,9 +6,20 @@ a result.
 
 import random
 
+import numpy as np
 import pytest
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 
-from toolvalidator.scoring.model import evaluate, feature_matrix, group_folds
+from toolvalidator.scoring.model import (
+    ScoreModel,
+    evaluate,
+    feature_matrix,
+    fit_model,
+    group_folds,
+    predict,
+)
 from toolvalidator.scoring.signals import Signals
 
 
@@ -93,3 +104,34 @@ def test_evaluate_needs_both_classes() -> None:
     rows, _, groups = _synthetic(n_problems=10)
     with pytest.raises(ValueError, match="both"):
         evaluate(rows, [True] * len(rows), groups, folds=5)
+
+
+# --- the deployed model (S6) --------------------------------------------------------------
+
+
+def test_fitted_model_predicts_like_sklearn_and_survives_json() -> None:
+    rows, labels, _ = _synthetic()
+    model = fit_model(rows, labels)
+    again = ScoreModel.model_validate_json(model.model_dump_json())
+    assert again == model
+    matrix, _, _ = feature_matrix(rows)
+    x = np.asarray(matrix, dtype=float)
+    reference = make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000)).fit(x, labels)
+    expected = reference.predict_proba(x)[:, 1].tolist()
+    for row, p in zip(rows, expected, strict=True):
+        assert predict(again, row) == pytest.approx(p, abs=1e-9)
+
+
+def test_missing_signal_with_an_indicator_is_scored() -> None:
+    rows, labels, _ = _synthetic()
+    rows[0] = _signals(None, semantics=None)  # pass rate and semantics missing at least once
+    model = fit_model(rows, labels)
+    assert "test_pass_rate_missing" in model.features
+    score = predict(model, _signals(None))
+    assert score is not None and 0.0 < score < 1.0
+
+
+def test_missing_signal_never_missing_in_training_cannot_be_scored() -> None:
+    rows, labels, _ = _synthetic()  # pass rate always present while fitting
+    model = fit_model(rows, labels)
+    assert predict(model, _signals(None)) is None
