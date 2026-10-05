@@ -9,8 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from experiments.fit_reliability_score import fit_rows, main
+from experiments.fit_reliability_score import MUTATION_SETS, SIGNAL_SETS, fit_rows, main
 from experiments.run_testgen_strategies import ArmOutcome, StrategyOutcome
+from toolvalidator.scoring.model import ScoreModel
 from toolvalidator.scoring.signals import Signals
 
 
@@ -66,11 +67,39 @@ def test_main_writes_a_report(tmp_path: Path) -> None:
     assert report["rows"] == str(rows_path)
 
 
+def test_main_writes_the_deployed_model_on_the_all_signal_set(tmp_path: Path) -> None:
+    rows_path = tmp_path / "testgen_eval.jsonl"
+    rows_path.write_text("".join(r.model_dump_json() + "\n" for r in _rows()), encoding="utf-8")
+    model_path = tmp_path / "score_model.json"
+    args = ["--rows", str(rows_path), "--out", str(tmp_path / "rq4.json")]
+    assert main([*args, "--model-out", str(model_path)]) == 0
+    model = ScoreModel.model_validate_json(model_path.read_text(encoding="utf-8"))
+    assert set(model.signals) <= set(SIGNAL_SETS["all"])
+    assert "mutation_score" not in model.signals
+    assert "test_pass_rate" in model.features
+
+
 def test_no_usable_rows_is_an_error(tmp_path: Path) -> None:
     rows_path = tmp_path / "empty.jsonl"
     rows_path.write_text("", encoding="utf-8")
     with pytest.raises(ValueError, match="no rows"):
         main(["--rows", str(rows_path), "--out", str(tmp_path / "x.json")])
+
+
+def test_mutation_sets_are_fit_when_asked() -> None:
+    rng = random.Random(5)
+    rows = [
+        r.model_copy(
+            update={"signals": r.signals.model_copy(update={"mutation_score": rng.random()})}
+        )
+        for r in _rows()
+        if r.signals is not None
+    ]
+    report = fit_rows(rows, folds=5, sets=SIGNAL_SETS | MUTATION_SETS)
+    sets = report["signal_sets"]
+    assert isinstance(sets, dict)
+    assert {"all_plus_mutation", "tests_plus_mutation", "mutation_only"} <= set(sets)
+    assert sets["mutation_only"]["signals"] == ["mutation_score"]  # type: ignore[index, call-overload]
 
 
 def test_named_signal_sets_are_fit_separately() -> None:
