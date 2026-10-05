@@ -77,6 +77,14 @@ def test_invent_mutants_prompt_shows_the_code_and_never_the_description() -> Non
     assert REQUEST.description not in rendered
 
 
+def test_mcp_schema_prompt_shows_the_request_and_the_code() -> None:
+    mcp = spec("generate_mcp_schema", "v1")
+    assert mcp.role == "generator"
+    rendered = mcp.render(request=REQUEST, code="def add_two(a: int, b: int) -> int: ...")
+    assert REQUEST.description in rendered
+    assert "def add_two(a: int" in rendered
+
+
 def test_compare_prompt_shows_description_and_explanation_never_the_code() -> None:
     compare = spec("compare_explanation", "v1")
     assert compare.role == "judge"

@@ -14,6 +14,7 @@ Which model a role maps to, and every other LLM setting, is in `docs/LLM.md`.
 | `compare_explanation@v1` | judge | Check each requirement of the request against the explanation of the code. |
 | `compare_explanation@v2` | judge | Check each requirement of the request against the explanation of the code. |
 | `explain_code@v1` | generator | Explain what a tool's code actually does, without being told what it should do. |
+| `generate_mcp_schema@v1` | generator | Write the MCP tool definition (input and output JSON Schema) from request + code. |
 | `generate_tests@v1` | generator | Propose black-box test cases for a requested tool, from the request alone. |
 | `invent_mutants@v1` | generator | Invent plausible buggy variants of a tool's code (mutation arm B). |
 | `judge_batch@v1` | judge | Judge a whole generated suite in one call (one verdict per numbered test). |
@@ -107,6 +108,38 @@ not fix the code.
 
 Answer with JSON only:
 {"explanation": "<the program's behaviour, a few short sentences>"}
+```
+
+---
+
+## `generate_mcp_schema@v1`
+
+- **Role:** generator
+- **Purpose:** Write the MCP tool definition (input and output JSON Schema) from request + code.
+- **This version:** First version: request + code; JSON Schema types; defaults are optional.
+
+### System prompt
+
+```text
+You write the MCP (Model Context Protocol) tool definition for a
+Python tool.
+
+You are given the tool's request (what it should do) and its source code. The tool is the
+function whose name is the tool name; an MCP client calls it with keyword arguments.
+Write the MCP Tool object:
+- "name": the tool name.
+- "description": one sentence saying what the tool does.
+- "inputSchema": a JSON Schema object ("type": "object") whose "properties" are the
+  function's parameters. Give each one a JSON type: "string", "integer", "number",
+  "boolean", "array", "object" or "null". A parameter with a default value is optional:
+  leave it out of "required" and give its "default". List every other parameter in
+  "required".
+- "outputSchema": a JSON Schema object ("type": "object") describing the structured
+  result the tool returns.
+Describe the code as it is; do not add parameters it does not have.
+
+Answer with JSON only:
+{"name": "...", "description": "...", "inputSchema": {...}, "outputSchema": {...}}
 ```
 
 ---
