@@ -5,7 +5,14 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from toolvalidator.config import LLMSettings, StaticSettings, load_settings, parse_env_file
+from toolvalidator.config import (
+    LLMSettings,
+    ScoreSettings,
+    Settings,
+    StaticSettings,
+    load_settings,
+    parse_env_file,
+)
 
 
 def test_defaults_with_empty_environment() -> None:
@@ -92,3 +99,10 @@ def test_parse_env_file_handles_comments_quotes_and_equals() -> None:
 def test_parse_env_file_rejects_malformed_line() -> None:
     with pytest.raises(ValueError, match="line 2"):
         parse_env_file("A=1\nnot a pair\n")
+
+
+def test_score_threshold_default_and_bounds() -> None:
+    assert ScoreSettings().accept_threshold == 0.5
+    assert Settings().score.accept_threshold == 0.5
+    with pytest.raises(ValidationError):
+        ScoreSettings(accept_threshold=1.5)

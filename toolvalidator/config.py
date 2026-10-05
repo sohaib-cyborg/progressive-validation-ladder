@@ -73,11 +73,19 @@ class StaticSettings(_Frozen):
     bandit_reject_severity: Severity = "HIGH"
 
 
+class ScoreSettings(_Frozen):
+    # S6: an all-pass tool is ACCEPTed when P(correct) >= threshold, else NEEDS_REVIEW.
+    # 0.5 = the balanced-class decision point (DECISIONS.md 2026-10-02).
+    accept_threshold: float = Field(default=0.5, gt=0, lt=1)
+    model_path: Path = Path("results/rq4/score_model.json")
+
+
 class Settings(_Frozen):
     llm: LLMSettings = Field(default_factory=LLMSettings)
     sandbox: SandboxSettings = Field(default_factory=SandboxSettings)
     static: StaticSettings = Field(default_factory=StaticSettings)
     execution: ExecutionSettings = Field(default_factory=ExecutionSettings)
+    score: ScoreSettings = Field(default_factory=ScoreSettings)
     dataset_dir: Path = Path("data/runbugrun_py")
     results_dir: Path = Path("results")
 

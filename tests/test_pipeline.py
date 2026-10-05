@@ -108,3 +108,32 @@ def test_static_stages_use_configured_bandit_severity(fake_sandbox: FakeSandbox)
     assert default.verdict is Verdict.ACCEPT
     assert strict.verdict is Verdict.REJECT
     assert strict.failures[0].category == "dangerous_call"
+
+
+# --- S6: the score maps an all-pass record to ACCEPT or NEEDS_REVIEW ------------------------
+
+
+def _score_stage(score: float | None) -> Stage:
+    def stage(artifact: ToolArtifact, record: ValidationRecord, sandbox: Sandbox) -> StageResult:
+        return record.add(StageResult(stage="s6_score", passed=True, data={"score": score}))
+
+    return stage
+
+
+@pytest.mark.parametrize(
+    ("score", "verdict"),
+    [(0.9, Verdict.ACCEPT), (0.5, Verdict.ACCEPT), (0.49, Verdict.NEEDS_REVIEW),
+     (None, Verdict.NEEDS_REVIEW)],
+)  # fmt: skip
+def test_score_decides_accept_or_needs_review(
+    fake_sandbox: FakeSandbox, score: float | None, verdict: Verdict
+) -> None:
+    stages = [_stage("a", True, []), _score_stage(score)]
+    rec = run_pipeline(TOOL, REQUEST, stages, fake_sandbox, accept_threshold=0.5)
+    assert rec.verdict is verdict
+    assert rec.failures == []
+
+
+def test_a_failed_stage_still_rejects_before_any_score(fake_sandbox: FakeSandbox) -> None:
+    stages = [_stage("a", False, []), _score_stage(0.99)]
+    assert run_pipeline(TOOL, REQUEST, stages, fake_sandbox).verdict is Verdict.REJECT
