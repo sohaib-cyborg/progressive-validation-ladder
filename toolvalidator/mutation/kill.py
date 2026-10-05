@@ -18,7 +18,13 @@ from pydantic import BaseModel, ConfigDict
 
 from toolvalidator.contracts import CapabilityRequest, IOExample, Sandbox
 from toolvalidator.mutation import Mutant
-from toolvalidator.stages.s4_execute import HarnessError, run_cases
+from toolvalidator.stages.s4_execute import (
+    DEFAULT_ABS_TOL,
+    DEFAULT_REL_TOL,
+    CasesRun,
+    HarnessError,
+    run_cases,
+)
 
 __all__ = ["KillMatrix", "SuiteScore", "run_matrix", "suite_score"]
 
@@ -50,14 +56,19 @@ def run_matrix(
     sandbox: Sandbox,
     *,
     timeout_s: float | None = None,
+    rel_tol: float = DEFAULT_REL_TOL,
+    abs_tol: float = DEFAULT_ABS_TOL,
 ) -> KillMatrix:
-    """Run the tool and each mutant against ``tests`` in the sandbox."""
+    """Run the tool and each mutant against ``tests`` in the sandbox (S4's comparison rules)."""
     if not tests:
         return KillMatrix(tool=[], mutants=[[] for _ in mutants], seconds=0.0)
     seconds = 0.0
     rows: list[list[bool]] = []
     for program in [code, *(m.code for m in mutants)]:
-        passes, spent = _passes(program, request, tests, sandbox, timeout_s)
+        run = run_cases(
+            program, request, tests, sandbox, timeout_s=timeout_s, rel_tol=rel_tol, abs_tol=abs_tol
+        )
+        passes, spent = _passes(run, len(tests))
         rows.append(passes)
         seconds += spent
     return KillMatrix(tool=rows[0], mutants=rows[1:], seconds=seconds)
@@ -72,17 +83,10 @@ def suite_score(matrix: KillMatrix, indices: Sequence[int]) -> SuiteScore:
     return SuiteScore(killed=killed, total=total, usable_tests=len(usable), score=score)
 
 
-def _passes(
-    program: str,
-    request: CapabilityRequest,
-    tests: Sequence[IOExample],
-    sandbox: Sandbox,
-    timeout_s: float | None,
-) -> tuple[list[bool], float]:
-    run = run_cases(program, request, tests, sandbox, timeout_s=timeout_s)
+def _passes(run: CasesRun, n_tests: int) -> tuple[list[bool], float]:
     if run.timed_out:
-        return [False] * len(tests), run.duration_s
+        return [False] * n_tests, run.duration_s
     by_index = {outcome.index: outcome.passed for outcome in run.outcomes}
-    if sorted(by_index) != list(range(len(tests))):
-        raise HarnessError(f"harness reported {len(by_index)} outcomes for {len(tests)} tests")
-    return [by_index[i] for i in range(len(tests))], run.duration_s
+    if sorted(by_index) != list(range(n_tests)):
+        raise HarnessError(f"harness reported {len(by_index)} outcomes for {n_tests} tests")
+    return [by_index[i] for i in range(n_tests)], run.duration_s

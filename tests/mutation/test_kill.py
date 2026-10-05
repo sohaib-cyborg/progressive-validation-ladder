@@ -1,5 +1,6 @@
 """Tests for kill counting (toolvalidator/mutation/kill.py)."""
 
+import json
 from collections.abc import Iterator
 from typing import Any
 
@@ -77,6 +78,24 @@ def test_no_tests_runs_nothing() -> None:
     matrix = run_matrix(TOOL, [_mutant("m")], REQUEST, [], sandbox)
     assert sandbox.codes == []
     assert (matrix.tool, matrix.mutants) == ([], [[]])
+
+
+def test_timeout_and_tolerances_reach_the_harness() -> None:
+    payloads: list[dict[str, Any]] = []
+    sandbox = ByCodeSandbox({TOOL: [True, True]})
+    original = sandbox.run
+
+    def spy(script: str, *, stdin: str = "", timeout_s: float | None = None) -> Any:
+        payloads.append(json.loads(stdin))
+        return original(script, stdin=stdin, timeout_s=timeout_s)
+
+    sandbox.run = spy  # type: ignore[method-assign]
+    run_matrix(TOOL, [], REQUEST, TESTS, sandbox, timeout_s=3.0, rel_tol=0.1, abs_tol=0.2)
+    assert (payloads[0]["timeout_s"], payloads[0]["rel_tol"], payloads[0]["abs_tol"]) == (
+        3.0,
+        0.1,
+        0.2,
+    )
 
 
 def test_a_harness_reply_with_missing_tests_raises() -> None:
