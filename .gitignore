@@ -15,6 +15,8 @@ htmlcov/
 
 # Data & results (large / regenerable)
 data/runbugrun_py/
+# Project B MCP tools + schemas: no licence, never committed
+data/mcp_tools/
 results/*
 !results/.gitkeep
 *.pkl
