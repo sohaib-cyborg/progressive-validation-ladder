@@ -20,11 +20,12 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import brier_score_loss, roc_auc_score
+from sklearn.metrics import brier_score_loss
 from sklearn.model_selection import GroupKFold
 from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.preprocessing import StandardScaler
 
+from toolvalidator.scoring.metrics import CalibrationBin, auc, calibration, spearman
 from toolvalidator.scoring.signals import Signals
 
 SIGNALS: tuple[str, ...] = tuple(Signals.model_fields)
@@ -36,14 +37,6 @@ type Folds = list[tuple[list[int], list[int]]]
 
 class _Frozen(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
-
-
-class CalibrationBin(_Frozen):
-    lower: float
-    upper: float
-    count: int
-    mean_predicted: float | None
-    fraction_correct: float | None
 
 
 class FitReport(_Frozen):
@@ -91,14 +84,14 @@ def evaluate(
         folds=folds,
         features=columns,
         dropped=dropped,
-        auc=_auc(labels, scores),
+        auc=auc(labels, scores),
         spearman=spearman([float(v) for v in labels], scores.tolist()),
         brier=float(brier_score_loss(labels, scores)),
         calibration=calibration(labels, scores, bins),
         coefficients={c: float(w) for c, w in zip(columns, regression.coef_[0], strict=True)},
         intercept=float(regression.intercept_[0]),
         ablation={
-            name: _auc(labels, _without(name, matrix, columns, labels, split)) for name in kept
+            name: auc(labels, _without(name, matrix, columns, labels, split)) for name in kept
         },
     )
 
@@ -151,60 +144,12 @@ def out_of_fold(matrix: Matrix, labels: Sequence[bool], folds: Folds) -> NDArray
     return scores
 
 
-def calibration(
-    labels: Sequence[bool], scores: NDArray[np.float64], bins: int
-) -> list[CalibrationBin]:
-    edges = np.linspace(0.0, 1.0, bins + 1)
-    y = np.asarray(labels, dtype=float)
-    result: list[CalibrationBin] = []
-    for k in range(bins):
-        lower, upper = float(edges[k]), float(edges[k + 1])
-        inside = (scores >= lower) & ((scores < upper) if k < bins - 1 else (scores <= upper))
-        count = int(inside.sum())
-        result.append(
-            CalibrationBin(
-                lower=lower,
-                upper=upper,
-                count=count,
-                mean_predicted=float(scores[inside].mean()) if count else None,
-                fraction_correct=float(y[inside].mean()) if count else None,
-            )
-        )
-    return result
-
-
-def spearman(a: Sequence[float], b: Sequence[float]) -> float:
-    """Spearman's rho with average ranks for ties (matches scipy.stats.spearmanr)."""
-    ranks_a, ranks_b = _ranks(a), _ranks(b)
-    if ranks_a.std() == 0 or ranks_b.std() == 0:
-        raise ValueError("spearman is undefined for a constant input")
-    return float(np.corrcoef(ranks_a, ranks_b)[0, 1])
-
-
-def _ranks(values: Sequence[float]) -> NDArray[np.float64]:
-    data = np.asarray(values, dtype=float)
-    order = np.argsort(data, kind="mergesort")
-    ranks = np.empty(len(data))
-    start = 0
-    while start < len(data):
-        end = start
-        while end + 1 < len(data) and data[order[end + 1]] == data[order[start]]:
-            end += 1
-        ranks[order[start : end + 1]] = (start + end) / 2 + 1
-        start = end + 1
-    return ranks
-
-
 def _without(
     name: str, matrix: Matrix, columns: list[str], labels: Sequence[bool], folds: Folds
 ) -> NDArray[np.float64]:
     keep = [i for i, c in enumerate(columns) if c not in (name, name + MISSING)]
     reduced = [[row[i] for i in keep] for row in matrix]
     return out_of_fold(reduced, labels, folds)
-
-
-def _auc(labels: Sequence[bool], scores: NDArray[np.float64]) -> float:
-    return float(roc_auc_score(labels, scores))
 
 
 def _model() -> Pipeline:

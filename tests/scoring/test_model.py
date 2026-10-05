@@ -8,7 +8,7 @@ import random
 
 import pytest
 
-from toolvalidator.scoring.model import evaluate, feature_matrix, group_folds, spearman
+from toolvalidator.scoring.model import evaluate, feature_matrix, group_folds
 from toolvalidator.scoring.signals import Signals
 
 
@@ -72,13 +72,6 @@ def test_group_folds_never_split_a_problem() -> None:
 def test_too_few_problems_for_the_folds_raises() -> None:
     with pytest.raises(ValueError, match="problems"):
         group_folds(["a", "a", "b", "b"], 5)
-
-
-def test_spearman_handles_ties() -> None:
-    assert spearman([1, 2, 3, 4], [10, 20, 30, 40]) == pytest.approx(1.0)
-    assert spearman([1, 2, 3, 4], [4, 3, 2, 1]) == pytest.approx(-1.0)
-    # scipy.stats.spearmanr([0, 0, 1, 1], [0.1, 0.4, 0.35, 0.8]) = 0.4472135955
-    assert spearman([0, 0, 1, 1], [0.1, 0.4, 0.35, 0.8]) == pytest.approx(0.4472135955)
 
 
 def test_evaluate_reports_held_out_metrics_and_ablation() -> None:
